@@ -1,0 +1,1254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The Mirror's Echo</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        :root { --hue: 280; --comp: 100; }
+        body {
+            font-family: 'JetBrains Mono', monospace;
+            background: #000;
+            color: rgba(255, 255, 255, 0.9);
+            min-height: 100vh;
+        }
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        /* Shimmer Background */
+        .shimmer-bg {
+            position: fixed; inset: 0; width: 100%; height: 100%;
+            background: transparent; overflow: hidden; z-index: -1; pointer-events: none;
+        }
+        .shimmer-bg::after {
+            content: ''; position: absolute; inset: 0;
+            background: linear-gradient(115deg,
+                rgba(255, 255, 255, 0) 0%, rgba(255, 105, 180, 0.22) 10%,
+                rgba(138, 43, 226, 0.22) 20%, rgba(75, 0, 130, 0.22) 30%,
+                rgba(0, 191, 255, 0.22) 40%, rgba(0, 255, 255, 0.22) 50%,
+                rgba(255, 215, 0, 0.22) 60%, rgba(255, 165, 0, 0.22) 70%,
+                rgba(255, 20, 147, 0.22) 80%, rgba(255, 255, 255, 0) 100%);
+            background-size: 300% 100%; mix-blend-mode: screen;
+            animation: shimmer 8s linear infinite; opacity: 0.76;
+        }
+        @keyframes shimmer { 0% { background-position: -300% 0; } 100% { background-position: 300% 0; } }
+        @keyframes textglow { 0%,100%{text-shadow:0 0 15px rgb(80,220,220),0 0 30px rgb(80,220,220);} 50%{text-shadow:0 0 5px rgb(80,220,220);} }
+
+        .header {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+        .header h1 {
+            font-size: 1.5rem;
+            font-weight: 400;
+            letter-spacing: 0.1em;
+            margin-bottom: 0.5rem;
+            opacity: 0.8;
+            animation: flicker 3s infinite;
+        }
+        .header p {
+            opacity: 0.5;
+            font-size: 0.75rem;
+            letter-spacing: 0.05em;
+        }
+
+        @keyframes flicker {
+            0%, 19%, 21%, 23%, 25%, 54%, 56%, 100% { opacity: 0.8; }
+            20%, 24%, 55% { opacity: 0.3; }
+            22% { opacity: 0.5; transform: translate(-1px, 0); }
+        }
+
+        .top-controls {
+            display: flex;
+            justify-content: center;
+            gap: 0.5rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .btn {
+            padding: 0.6rem 2rem;
+            font-size: 0.85rem;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            background: transparent;
+            color: rgba(255, 255, 255, 0.9);
+            cursor: pointer;
+            font-family: 'JetBrains Mono', monospace;
+            letter-spacing: 0.05em;
+            transition: all 0.2s;
+        }
+        .btn:hover:not(:disabled) {
+            border-color: #fff;
+            background: rgba(255, 255, 255, 0.05);
+        }
+        .btn:disabled {
+            opacity: 0.3;
+            cursor: not-allowed;
+        }
+        .btn.flicker-btn {
+            animation: btnFlicker 3s infinite;
+        }
+
+        @keyframes btnFlicker {
+            0%, 19%, 21%, 23%, 25%, 54%, 56%, 100% {
+                opacity: 1;
+                border-color: rgba(255, 255, 255, 0.5);
+            }
+            20%, 24%, 55% {
+                opacity: 0.5;
+                border-color: rgba(255, 255, 255, 0.2);
+            }
+        }
+
+        .status-bar {
+            text-align: center;
+            padding: 1rem;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            margin-bottom: 1.5rem;
+        }
+        .status-bar .time {
+            font-size: 1.2rem;
+            opacity: 0.8;
+            letter-spacing: 0.1em;
+        }
+        .status-bar #status {
+            font-size: 0.75rem;
+            opacity: 0.5;
+            margin-top: 0.5rem;
+            letter-spacing: 0.02em;
+        }
+
+        .video-grid {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        /* Festival: output video takes prime position */
+        .video-panel.output-panel {
+            order: 1;
+        }
+        .video-panel.output-panel .video-box {
+            aspect-ratio: 16/9;
+        }
+
+        /* Festival: event stream between videos */
+        .event-stream-panel {
+            order: 2;
+            background: rgba(0, 0, 0, 0.5);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            padding: 0.75rem 1rem;
+            max-height: 180px;
+            overflow-y: auto;
+            font-size: 0.7rem;
+            font-family: 'JetBrains Mono', monospace;
+        }
+        .event-stream-panel::-webkit-scrollbar { width: 4px; }
+        .event-stream-panel::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 2px; }
+        .event-stream-header {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            margin-bottom: 0.5rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 1px solid rgba(255,255,255,0.06);
+        }
+        .event-stream-header .status-dots {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .event-stream-header .dot-label {
+            display: flex;
+            align-items: center;
+            gap: 0.25rem;
+            font-size: 0.6rem;
+            opacity: 0.7;
+        }
+        .event-stream-header .dot-label .dot {
+            width: 7px; height: 7px;
+            border-radius: 50%;
+            background: #444;
+        }
+        .event-stream-header .dot-label .dot.on { background: #6bcb77; }
+        .event-stream-header .dot-label .dot.warn { background: #ffd93d; }
+        .event-stream-header .dot-label .dot.err { background: #ff6b6b; }
+        .event-entry {
+            padding: 0.15rem 0;
+            opacity: 0.6;
+            border-bottom: 1px solid rgba(255,255,255,0.03);
+            line-height: 1.4;
+        }
+        .event-entry.highlight { opacity: 1; color: rgb(80, 220, 220); }
+        .event-entry.error { opacity: 1; color: #ff6b6b; }
+        .event-entry .event-time { opacity: 0.3; margin-right: 0.5rem; }
+        .event-entry .event-type { 
+            display: inline-block;
+            min-width: 50px;
+            color: rgba(255,255,255,0.4);
+            margin-right: 0.5rem;
+        }
+
+        /* Festival: input camera small at bottom */
+        .video-panel.input-panel {
+            order: 3;
+        }
+        .video-panel.input-panel .video-box {
+            aspect-ratio: 16/9;
+            max-height: 180px;
+        }
+        .video-panel.input-panel.connected {
+            /* Shrink when connected */
+            max-width: 320px;
+            margin: 0 auto;
+        }
+        .video-panel.input-panel.connected .video-box {
+            aspect-ratio: 4/3;
+            max-height: 200px;
+        }
+
+        .video-panel {
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            padding: 1.5rem;
+        }
+        .video-panel h3 {
+            margin-bottom: 1rem;
+            font-size: 0.8rem;
+            font-weight: 400;
+            opacity: 0.6;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+        }
+
+        /* Panel header with loading intro inline */
+        .panel-header {
+            display: flex;
+            align-items: baseline;
+            gap: 1rem;
+            margin-bottom: 0.5rem;
+            flex-wrap: wrap;
+        }
+        .panel-header h3 {
+            margin-bottom: 0;
+        }
+        .panel-header .loading-intro {
+            color: rgb(80, 220, 220);
+            font-size: 0.75rem;
+            font-weight: 500;
+            letter-spacing: 0.05em;
+            text-shadow: 0 0 15px rgb(80, 220, 220), 0 0 30px rgb(80, 220, 220);
+            animation: introFlicker 3s infinite;
+        }
+        .panel-header .loading-intro:empty { display: none; }
+
+        .loading-status {
+            font-size: 0.7rem;
+            letter-spacing: 0.05em;
+            margin-bottom: 0.5rem;
+            min-height: 1.2rem;
+            font-family: 'JetBrains Mono', monospace;
+        }
+        .loading-status:empty { display: none; }
+        .loading-status .dot { animation: blink 1.4s infinite; }
+        .loading-status .dot:nth-child(2) { animation-delay: 0.2s; }
+        .loading-status .dot:nth-child(3) { animation-delay: 0.4s; }
+
+        @keyframes blink {
+            0%, 20% { opacity: 0; }
+            50% { opacity: 1; }
+            100% { opacity: 0; }
+        }
+
+        @keyframes introFlicker {
+            0%, 19%, 21%, 23%, 25%, 54%, 56%, 100% {
+                opacity: 1;
+                text-shadow: 0 0 15px rgb(80, 220, 220), 0 0 30px rgb(80, 220, 220);
+            }
+            20%, 24%, 55% { opacity: 0.4; text-shadow: 0 0 5px rgb(80, 220, 220); }
+            22% { opacity: 0.6; text-shadow: 0 0 10px rgb(80, 220, 220); }
+        }
+
+        .video-box {
+            position: relative;
+            aspect-ratio: 16/9;
+            background: #000;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            overflow: hidden;
+        }
+
+        .fullscreen-btn {
+            position: absolute;
+            top: 0.75rem;
+            right: 0.75rem;
+            padding: 0.4rem 0.6rem;
+            font-size: 0.7rem;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            background: rgba(0, 0, 0, 0.7);
+            color: rgba(255, 255, 255, 0.8);
+            cursor: pointer;
+            font-family: 'JetBrains Mono', monospace;
+            opacity: 0;
+            transition: opacity 0.3s;
+            z-index: 10;
+        }
+        .video-box:hover .fullscreen-btn { opacity: 1; }
+        .video-box video {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            object-fit: cover;
+        }
+        .video-placeholder {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: rgba(255, 255, 255, 0.3);
+            font-size: 0.75rem;
+        }
+
+        /* Waiting Room Overlay */
+        .waiting-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.95);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 2000;
+        }
+        .waiting-overlay h2 {
+            font-size: 1.2rem;
+            font-weight: 400;
+            letter-spacing: 0.1em;
+            margin-bottom: 1rem;
+            opacity: 0.8;
+        }
+        .waiting-overlay p {
+            opacity: 0.5;
+            margin-bottom: 1rem;
+            font-size: 0.8rem;
+            text-align: center;
+            max-width: 400px;
+        }
+        .waiting-overlay .wait-status {
+            font-size: 0.75rem;
+            opacity: 0.4;
+            margin-top: 1rem;
+        }
+
+        /* Color Palette - Pudding Keycap Style */
+        .palette-section {
+            background: rgba(8, 8, 12, 0.25);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.04);
+            border-radius: 16px;
+            padding: 1.25rem;
+            margin-top: 1.5rem;
+            margin-bottom: 1.5rem;
+            box-shadow:
+                0 0 80px rgba(138, 43, 226, 0.08),
+                0 0 160px rgba(0, 191, 255, 0.05),
+                inset 0 1px 0 rgba(255, 255, 255, 0.03);
+            animation: paletteBreathe 6s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+        @keyframes paletteBreathe {
+            0%, 100% { opacity: 0.85; filter: brightness(0.95); }
+            50% { opacity: 1; filter: brightness(1.02); }
+        }
+        .palette-label {
+            font-size: 0.65rem;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            opacity: 0.5;
+            margin-bottom: 0.75rem;
+        }
+        .palette {
+            display: grid;
+            grid-template-columns: repeat(8, 1fr);
+            gap: 0.5rem;
+            margin-bottom: 1rem;
+        }
+        .palette-btn {
+            aspect-ratio: 1;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+            min-height: 48px;
+            position: relative;
+            background: transparent !important;
+            overflow: visible;
+            animation: btnBreathe 6s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+            animation-delay: calc(var(--btn-index, 0) * 0.1s);
+        }
+
+        /* RGB backlight glow */
+        .palette-btn::before {
+            content: '';
+            position: absolute;
+            inset: 20%;
+            border-radius: 6px;
+            background: currentColor;
+            filter: blur(14px);
+            opacity: 0.85;
+            z-index: 1;
+            animation: glowPulse 6s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+            animation-delay: calc(var(--btn-index, 0) * 0.1s);
+        }
+
+        /* Frosted translucent keycap shell */
+        .palette-btn::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            border-radius: 8px;
+            background: linear-gradient(170deg,
+                rgba(255,255,255,0.45) 0%,
+                rgba(255,255,255,0.22) 25%,
+                rgba(255,255,255,0.10) 50%,
+                rgba(255,255,255,0.04) 75%,
+                rgba(255,255,255,0.01) 100%);
+            box-shadow:
+                inset 0 3px 6px rgba(255,255,255,0.35),
+                inset 0 -2px 4px rgba(0,0,0,0.15),
+                inset 3px 0 6px rgba(255,255,255,0.12),
+                inset -3px 0 6px rgba(255,255,255,0.12),
+                0 6px 12px rgba(0,0,0,0.4),
+                0 2px 4px rgba(0,0,0,0.3);
+            z-index: 2;
+            border: 1px solid rgba(255,255,255,0.12);
+            border-top-color: rgba(255,255,255,0.25);
+            border-bottom-color: rgba(0,0,0,0.1);
+            transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        @keyframes glowPulse {
+            0%, 100% { filter: blur(12px); opacity: 0.7; inset: 22%; }
+            50% { filter: blur(18px); opacity: 1; inset: 15%; }
+        }
+        @keyframes btnBreathe {
+            0%, 100% { filter: brightness(0.9) saturate(1.0); transform: translateY(0); }
+            50% { filter: brightness(1.1) saturate(1.2); transform: translateY(-1px); }
+        }
+
+        .palette-btn:hover {
+            transform: translateY(-4px) scale(1.06);
+            filter: brightness(1.15) saturate(1.3);
+        }
+        .palette-btn:hover::before { filter: blur(20px); opacity: 1; inset: 10%; }
+        .palette-btn:hover::after {
+            background: linear-gradient(170deg,
+                rgba(255,255,255,0.55) 0%,
+                rgba(255,255,255,0.28) 25%,
+                rgba(255,255,255,0.14) 50%,
+                rgba(255,255,255,0.06) 75%,
+                rgba(255,255,255,0.02) 100%);
+            box-shadow:
+                inset 0 3px 8px rgba(255,255,255,0.45),
+                inset 0 -2px 4px rgba(0,0,0,0.1),
+                0 8px 20px rgba(0,0,0,0.5),
+                0 4px 8px rgba(0,0,0,0.3);
+        }
+        .palette-btn.active::before { filter: blur(20px); opacity: 1; inset: 12%; }
+        .palette-btn.active::after {
+            border-color: rgba(255,255,255,0.3);
+            box-shadow:
+                inset 0 3px 8px rgba(255,255,255,0.5),
+                inset 0 -2px 4px rgba(0,0,0,0.1),
+                0 8px 25px rgba(0,0,0,0.5),
+                0 4px 8px rgba(0,0,0,0.3),
+                0 0 30px currentColor;
+        }
+
+        .color-slider { display: flex; align-items: center; gap: 1rem; }
+        .color-slider label { font-size: 0.65rem; text-transform: uppercase; opacity: 0.5; }
+        .color-slider input { flex: 1; }
+        .color-slider span { font-size: 0.8rem; color: hsl(var(--hue), 85%, 65%); min-width: 45px; text-align: right; }
+
+        #colorSlider, #chroma {
+            background: linear-gradient(to right,
+                hsl(0, 85%, 55%), hsl(60, 85%, 55%), hsl(120, 85%, 55%),
+                hsl(180, 85%, 55%), hsl(240, 85%, 55%), hsl(300, 85%, 55%), hsl(360, 85%, 55%)) !important;
+            height: 6px !important;
+        }
+
+        .controls {
+            background: #111;
+            border: 1px solid #333;
+            padding: 1rem;
+            margin-bottom: 1.5rem;
+            display: flex;
+            gap: 1.5rem;
+            justify-content: center;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        .controls label { font-size: 0.75rem; opacity: 0.7; margin-right: 0.3rem; }
+        .controls input[type="range"] { width: 100px; vertical-align: middle; }
+        .controls span, .sl span { font-size: 0.8rem; color: hsl(var(--comp), 85%, 65%); min-width: 40px; display: inline-block; }
+        .color-slider span { color: hsl(var(--hue), 85%, 65%) !important; }
+
+        .sliders {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 1rem;
+            background: #0a0a0a;
+            border: 1px solid #222;
+            padding: 1rem;
+            margin-bottom: 2rem;
+        }
+        .sl label { display: block; font-size: 0.65rem; opacity: 0.6; margin-bottom: 0.25rem; }
+        .sl input { width: 100%; }
+
+        input[type="range"] { -webkit-appearance: none; background: rgba(255,255,255,0.15); height: 4px; border-radius: 2px; }
+
+        #chroma::-webkit-slider-thumb, #colorSlider::-webkit-slider-thumb {
+            -webkit-appearance: none; width: 20px; height: 20px; border-radius: 50%;
+            background: hsl(var(--hue), 85%, 55%); border: 3px solid #fff; cursor: pointer;
+            box-shadow: 0 0 8px hsl(var(--hue), 85%, 55%);
+        }
+
+        input[type="range"]:not(#chroma):not(#colorSlider)::-webkit-slider-thumb {
+            -webkit-appearance: none; width: 16px; height: 16px; border-radius: 50%;
+            background: hsl(var(--comp), 85%, 55%); border: 2px solid rgba(255,255,255,0.7); cursor: pointer;
+            box-shadow: 0 0 6px hsl(var(--comp), 85%, 55%);
+        }
+
+        /* Raindrop Effects */
+        .raindrop {
+            position: fixed;
+            border-radius: 50%;
+            pointer-events: none;
+            z-index: 1000;
+            opacity: 0;
+            will-change: transform, opacity;
+            animation: raindrop-crossfade 8s ease-in-out forwards;
+        }
+
+        @keyframes raindrop-crossfade {
+            0% { opacity: 0; transform: scale(0.5); }
+            15% { opacity: var(--target-opacity, 0.6); transform: scale(0.9); }
+            25% { opacity: var(--target-opacity, 0.6); transform: scale(1); }
+            75% { opacity: var(--target-opacity, 0.6); transform: scale(1.05); }
+            100% { opacity: 0; transform: scale(1.15); }
+        }
+
+        @media (max-width: 700px) {
+            .sliders { grid-template-columns: 1fr 1fr; }
+            .palette { grid-template-columns: repeat(4, 1fr); }
+            .panel-header { flex-direction: column; gap: 0.3rem; }
+        }
+
+        /* Mic Level Meter */
+        .mic-meter {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 0.3rem;
+            padding: 0;
+            margin: 0.25rem auto 0 auto;
+            max-width: 400px;
+        }
+        .mic-bar-container {
+            width: 100%;
+            height: 12px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 6px;
+            overflow: hidden;
+        }
+        .mic-bar {
+            height: 100%;
+            width: 0%;
+            background: linear-gradient(90deg,
+                hsl(320, 100%, 50%),
+                hsl(300, 100%, 60%),
+                hsl(180, 100%, 50%));
+            border-radius: 6px;
+            transition: width 0.05s ease-out;
+            box-shadow: 0 0 10px hsl(320, 100%, 50%), 0 0 20px hsl(180, 100%, 50%);
+        }
+        .mic-status {
+            font-size: 0.75rem;
+            letter-spacing: 0.05em;
+            text-align: center;
+            width: 100%;
+        }
+        .mic-status.good { color: hsl(180, 100%, 50%); text-shadow: 0 0 10px hsl(180, 100%, 50%); }
+        .mic-status.low { color: hsl(45, 85%, 65%); }
+        .mic-status.none { color: hsl(320, 100%, 60%); text-shadow: 0 0 8px hsl(320, 100%, 50%); }
+
+        /* Connection Debug Log */
+        .debug-log {
+            position: fixed;
+            bottom: 10px;
+            right: 10px;
+            width: 350px;
+            max-height: 200px;
+            overflow-y: auto;
+            background: rgba(0, 0, 0, 0.9);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            padding: 0.5rem;
+            font-size: 0.65rem;
+            font-family: 'JetBrains Mono', monospace;
+            z-index: 3000;
+            display: none;
+        }
+        .debug-log.visible { display: block; }
+        .debug-log .log-entry { padding: 2px 0; border-bottom: 1px solid rgba(255,255,255,0.1); }
+        .debug-log .log-entry.error { color: #ff6b6b; }
+        .debug-log .log-entry.warn { color: #ffd93d; }
+        .debug-log .log-entry.success { color: #6bcb77; }
+        .debug-log .log-entry.info { color: #4d96ff; }
+        .debug-toggle {
+            position: fixed;
+            bottom: 10px;
+            right: 10px;
+            padding: 0.3rem 0.6rem;
+            font-size: 0.65rem;
+            background: rgba(0,0,0,0.8);
+            border: 1px solid rgba(255,255,255,0.3);
+            color: rgba(255,255,255,0.7);
+            cursor: pointer;
+            z-index: 3001;
+        }
+        #status.error { color: #ff6b6b !important; opacity: 1 !important; }
+        #status.warn { color: #ffd93d !important; opacity: 1 !important; }
+        #status.success { color: #6bcb77 !important; opacity: 1 !important; }
+    </style>
+</head>
+<body>
+    <div class="shimmer-bg"></div>
+    <div class="container">
+        <div class="header">
+            <h1>THE MIRROR'S ECHO</h1>
+            <p>Your camera - Processing - Your reflection transformed</p>
+        </div>
+
+        <div class="top-controls">
+            <button class="btn flicker-btn" id="micToggleBtn" onclick="toggleMaestraMic()">Start Mic</button>
+            <button class="btn" id="connectBtn" onclick="connect()">Connect Webcam</button>
+            <button class="btn" id="disconnectBtn" onclick="manualDisconnect()" style="display:none;">Disconnect</button>
+        </div>
+
+        <!-- Mic Level Meter -->
+        <div class="mic-meter" id="micMeter" style="display: none;">
+            <div class="mic-bar-container">
+                <div class="mic-bar" id="micBar"></div>
+            </div>
+            <div class="mic-status" id="micStatus">Checking...</div>
+        </div>
+
+        <!-- Maestra Speech → Prompt Display -->
+        <div id="maestraPanel" style="display:block; margin-bottom:1rem; padding:1rem; background:rgba(8,8,12,0.4); border:1px solid rgba(106,220,220,0.15); border-radius:10px;">
+            <div style="display:flex; align-items:center; gap:0.75rem; margin-bottom:0.5rem;">
+                <div id="dotSpeech" style="width:8px;height:8px;border-radius:50%;background:#444;"></div>
+                <span style="font-size:0.65rem;text-transform:uppercase;letter-spacing:0.1em;opacity:0.5;">Speech → Prompt</span>
+                <div id="dotMaestra" style="width:8px;height:8px;border-radius:50%;background:#444;margin-left:auto;"></div>
+                <span style="font-size:0.65rem;text-transform:uppercase;letter-spacing:0.1em;opacity:0.5;">Maestra</span>
+            </div>
+            <div style="text-align:center; padding:0.75rem; background:linear-gradient(135deg,#1a1040,#0d2030); border:1px solid #2a3a60; border-radius:8px;">
+                <div style="font-size:10px;letter-spacing:0.3em;text-transform:uppercase;color:rgba(255,255,255,0.3);margin-bottom:4px;">P5 — Noun Phrase → StreamDiffusion</div>
+                <div id="p5Word" style="font-size:1.5rem;font-weight:300;letter-spacing:0.08em;color:rgb(80,220,220);min-height:2rem;animation:textglow 3s ease-in-out infinite;">—</div>
+            </div>
+            <div id="interimText" style="font-size:0.7rem;opacity:0.4;margin-top:0.5rem;min-height:1rem;text-align:center;"></div>
+            <div id="p6Display" style="font-size:0.65rem;opacity:0.3;margin-top:0.25rem;text-align:center;">waiting for speech...</div>
+        </div>
+
+        <div class="status-bar">
+            <div class="time" id="timer">00:00</div>
+            <div id="status">Start Mic to begin speaking · Connect Webcam for video</div>
+        </div>
+
+        <div class="video-grid">
+            <!-- OUTPUT: Processed video on top (hero position) -->
+            <div class="video-panel output-panel">
+                <div class="panel-header">
+                    <h3>Processed Output (Your Reflection)</h3>
+                    <span class="loading-intro" id="loadingIntro"></span>
+                </div>
+                <div class="loading-status" id="loadingStatus"></div>
+                <div class="video-box" id="processedBox">
+                    <button class="fullscreen-btn" id="fullscreenBtn" onclick="toggleFullscreen()">&#x26F6;</button>
+                    <video id="processedVideo" autoplay playsinline webkit-playsinline></video>
+                    <div class="video-placeholder" id="processedPlaceholder">Processed feed will appear here</div>
+                </div>
+            </div>
+
+            <!-- EVENT STREAM: Live status between videos -->
+            <div class="event-stream-panel" id="eventStream">
+                <div class="event-stream-header">
+                    <div class="status-dots">
+                        <div class="dot-label"><div class="dot" id="dotAPI"></div>API</div>
+                        <div class="dot-label"><div class="dot" id="dotWS"></div>WS</div>
+                        <div class="dot-label"><div class="dot" id="dotMicSt"></div>Mic</div>
+                        <div class="dot-label"><div class="dot" id="dotSpeechSt"></div>Speech</div>
+                        <div class="dot-label"><div class="dot" id="dotInput"></div>Input</div>
+                        <div class="dot-label"><div class="dot" id="dotOutput"></div>Output</div>
+                    </div>
+                    <span style="margin-left:auto;font-size:0.55rem;opacity:0.3;" id="eventSessionId"></span>
+                </div>
+                <div id="eventLog"></div>
+            </div>
+
+            <!-- INPUT: Camera small at bottom -->
+            <div class="video-panel input-panel" id="inputPanel">
+                <h3>Your Camera (Input)</h3>
+                <div class="video-box">
+                    <video id="localVideo" autoplay muted playsinline></video>
+                    <div class="video-placeholder" id="localPlaceholder">Camera will appear here</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Color Palette - Pudding Keycap Style -->
+        <div class="palette-section">
+            <div class="palette-label">Color Palette</div>
+            <div class="palette">
+                <button class="palette-btn active" data-hue="280" style="color: hsl(280, 85%, 55%); --btn-index: 0;" title="Purple"></button>
+                <button class="palette-btn" data-hue="320" style="color: hsl(320, 90%, 55%); --btn-index: 1;" title="Pink"></button>
+                <button class="palette-btn" data-hue="15" style="color: hsl(15, 90%, 55%); --btn-index: 2;" title="Coral"></button>
+                <button class="palette-btn" data-hue="45" style="color: hsl(45, 90%, 55%); --btn-index: 3;" title="Gold"></button>
+                <button class="palette-btn" data-hue="120" style="color: hsl(120, 85%, 45%); --btn-index: 4;" title="Green"></button>
+                <button class="palette-btn" data-hue="180" style="color: hsl(180, 85%, 45%); --btn-index: 5;" title="Cyan"></button>
+                <button class="palette-btn" data-hue="220" style="color: hsl(220, 85%, 55%); --btn-index: 6;" title="Blue"></button>
+                <button class="palette-btn" data-hue="0" style="color: hsl(0, 85%, 55%); --btn-index: 7;" title="Red"></button>
+            </div>
+            <div class="color-slider">
+                <label>Color</label>
+                <input type="range" id="colorSlider" min="0" max="360" value="280">
+                <span id="colorVal">280°</span>
+            </div>
+        </div>
+
+        <div class="controls">
+            <div><label>Temporal Intensity</label><input type="range" id="temp" min="0" max="100" value="1"><span id="tempV">1%</span></div>
+            <div><label>Speed</label><input type="range" id="spd" min="5" max="30" value="10"><span id="spdV">1.0x</span></div>
+            <div><label>Bump</label><input type="range" id="bump" min="0" max="100" value="50"><span id="bumpV">50</span></div>
+            <div><label>Depth of Field</label><input type="range" id="depth" min="0" max="100" value="50"><span id="depthV">50</span></div>
+            <div><label>Gloss</label><input type="range" id="gloss" min="0" max="100" value="50"><span id="glossV">50</span></div>
+            <div><label>Emboss</label><input type="range" id="emboss" min="0" max="100" value="50"><span id="embossV">50</span></div>
+            <div><label>Halo</label><input type="range" id="halo" min="0" max="100" value="50"><span id="haloV">50</span></div>
+            <div><label>Shimmer</label><input type="range" id="shimmer" min="0" max="100" value="50"><span id="shimmerV">50</span></div>
+            <div><label>Opacity</label><input type="range" id="opacity" min="0" max="100" value="50"><span id="opacityV">50</span></div>
+            <div><label>Velocity</label><input type="range" id="velocity" min="0" max="100" value="50"><span id="velocityV">50</span></div>
+            <div><label>Photorealism</label><input type="range" id="photorealism" min="0" max="100" value="50"><span id="photorealismV">50</span></div>
+        </div>
+
+        <div class="sliders">
+            <div class="sl"><label>Chroma <span id="chromaV">280°</span></label><input type="range" id="chroma" min="0" max="360" value="280"></div>
+            <div class="sl"><label>Saturation <span id="satV">85%</span></label><input type="range" id="sat" min="0" max="100" value="85"></div>
+            <div class="sl"><label>Value <span id="valV">50%</span></label><input type="range" id="val" min="0" max="100" value="50"></div>
+            <div class="sl"><label>Size <span id="szV">50</span></label><input type="range" id="sz" min="10" max="120" value="50"></div>
+            <div class="sl"><label>Glow <span id="glwV">60</span></label><input type="range" id="glw" min="0" max="100" value="60"></div>
+        </div>
+    </div>
+
+    <button class="debug-toggle" onclick="toggleDebugLog()">Debug</button>
+    <div class="debug-log" id="debugLog"></div>
+
+    <script src="https://cdn.jsdelivr.net/npm/livekit-client/dist/livekit-client.umd.min.js"></script>
+    <script>
+        // ============================================
+        // MAESTRA INTEGRATION — Speech → NLP → TD Prompt
+        // ============================================
+        const MAESTRA_URL = 'https://maestra-dashboard-production.up.railway.app';
+        const MAESTRA_WS = MAESTRA_URL.replace('http','ws');
+        let maestraWs = null;
+        let recognition = null;
+        let speechActive = false;
+        let maestraEntityId = null;
+
+        function connectMaestra() {
+            maestraWs = new WebSocket(MAESTRA_WS + '/ws');
+            maestraWs.onopen = () => {
+                console.log('Maestra WS connected');
+                document.getElementById('dotMaestra').style.background = '#6ee7d4';
+                setDot('dotWS', 'on');
+            };
+            maestraWs.onmessage = (e) => {
+                try {
+                    const msg = JSON.parse(e.data);
+                    if (msg.type === 'state_changed' && msg.entity_slug === 'td-audio-reactive') {
+                        const st = msg.current_state || {};
+                        if (st.p5) document.getElementById('p5Word').textContent = st.p5;
+                        if (st.p6) document.getElementById('p6Display').textContent = st.p6;
+                    }
+                } catch(err) {}
+            };
+            maestraWs.onclose = () => {
+                document.getElementById('dotMaestra').style.background = '#444';
+                setTimeout(connectMaestra, 3000);
+            };
+            maestraWs.onerror = () => { maestraWs.close(); };
+        }
+
+        async function initMaestra() {
+            try {
+                const r = await fetch(MAESTRA_URL + '/entities/by-slug/td-audio-reactive');
+                const d = await r.json();
+                maestraEntityId = d.id;
+                if (d.state && d.state.p5) document.getElementById('p5Word').textContent = d.state.p5;
+                if (d.state && d.state.p6) document.getElementById('p6Display').textContent = d.state.p6;
+            } catch(e) {
+                console.log('Maestra entity fetch failed:', e);
+            }
+            connectMaestra();
+        }
+
+        function startSpeechRecognition() {
+            const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+            if (!SR) {
+                document.getElementById('interimText').textContent = 'Speech API not supported';
+                return;
+            }
+            recognition = new SR();
+            recognition.continuous = true;
+            recognition.interimResults = true;
+            recognition.lang = 'en-US';
+            recognition.maxAlternatives = 1;
+
+            recognition.onstart = () => {
+                speechActive = true;
+                document.getElementById('dotSpeech').style.background = '#6bcb77';
+                setDot('dotSpeechSt', 'on');
+                setDot('dotMicSt', 'on');
+            };
+
+            let _interimTimer = null;
+            let _lastInterim = '';
+            recognition.onresult = (e) => {
+                let interim = '', final = '';
+                for (let i = e.resultIndex; i < e.results.length; i++) {
+                    const t = e.results[i][0].transcript;
+                    if (e.results[i].isFinal) { final += t; }
+                    else { interim += t; }
+                }
+                document.getElementById('interimText').textContent = interim;
+
+                if (interim.trim() && interim.trim() !== _lastInterim) {
+                    _lastInterim = interim.trim();
+                    clearTimeout(_interimTimer);
+                    _interimTimer = setTimeout(() => {
+                        submitTranscript(_lastInterim);
+                    }, 100);
+                }
+
+                if (final.trim()) {
+                    clearTimeout(_interimTimer);
+                    _lastInterim = '';
+                    submitTranscript(final.trim());
+                }
+            };
+
+            recognition.onerror = (e) => {
+                if (e.error === 'no-speech') return;
+                console.log('Speech error:', e.error);
+                if (e.error === 'not-allowed') {
+                    document.getElementById('interimText').textContent = 'Mic permission denied';
+                }
+            };
+
+            recognition.onend = () => {
+                if ((isConnected || micTestActive) && speechActive) {
+                    try { recognition.start(); } catch(e) {}
+                } else {
+                    speechActive = false;
+                    document.getElementById('dotSpeech').style.background = '#444';
+                }
+            };
+
+            try { recognition.start(); } catch(e) { console.log('Speech start error:', e); }
+        }
+
+        function stopSpeechRecognition() {
+            speechActive = false;
+            if (recognition) {
+                try { recognition.stop(); } catch(e) {}
+                recognition = null;
+            }
+            document.getElementById('dotSpeech').style.background = '#444';
+        }
+
+        async function submitTranscript(text) {
+            try {
+                const resp = await fetch(MAESTRA_URL + '/transcript', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ text: text, source: 'browser-speech' })
+                });
+                const data = await resp.json();
+                if (data.status === 'ok') {
+                    if (data.p5) document.getElementById('p5Word').textContent = data.p5;
+                    if (data.p6) document.getElementById('p6Display').textContent = data.p6;
+                    document.getElementById('interimText').textContent = '';
+                }
+            } catch(e) {
+                console.log('Transcript submit error:', e);
+            }
+        }
+
+        initMaestra();
+
+        let micTestActive = false;
+        let _autoReconnectAttempts = 0;
+        const MAX_RECONNECT_ATTEMPTS = 20;
+        let _reconnectTimer = null;
+        function toggleMaestraMic() {
+            if (!micTestActive) {
+                startSpeechRecognition();
+                micTestActive = true;
+                document.getElementById('micToggleBtn').textContent = 'Stop Mic';
+                document.getElementById('micToggleBtn').style.borderColor = '#6bcb77';
+            } else {
+                stopSpeechRecognition();
+                micTestActive = false;
+                document.getElementById('micToggleBtn').textContent = 'Start Mic';
+                document.getElementById('micToggleBtn').style.borderColor = 'rgba(255,255,255,0.3)';
+            }
+        }
+    </script>
+    <script>
+        const S = {hue:280, sat:85, val:50, sz:50, spd:10, glw:60, temp:1, bump:50, depth:50, gloss:50, emboss:50, halo:50, shimmer:50, opacity:50, velocity:50, photorealism:50};
+
+        function updateColors() {
+            document.documentElement.style.setProperty('--hue', S.hue);
+            document.documentElement.style.setProperty('--comp', (S.hue + 180) % 360);
+        }
+        updateColors();
+
+        let sliderSendTimeout = null;
+        function sendSliders() {
+            if (sliderSendTimeout) clearTimeout(sliderSendTimeout);
+            sliderSendTimeout = setTimeout(() => {
+                fetch('/api/sliders', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(S) })
+                .then(res => res.json()).then(data => { console.log('Sliders sent to TouchDesigner:', S); })
+                .catch(err => { console.warn('Slider send failed:', err.message); });
+            }, 50);
+        }
+        sendSliders();
+
+        const ROOM_CONFIG = {
+            adaptiveStream: true, dynacast: true, disconnectOnPageLeave: false,
+            reconnectPolicy: { nextRetryDelayInMs: (context) => { if (context.retryCount > 30) return null; return 2000; } },
+            publishDefaults: { videoEncoding: { maxBitrate: 3_000_000, maxFramerate: 30 } }
+        };
+        let inputRoom = null, outputRoom = null, localStream = null, startTime = null, timerInterval = null, sessionTimeout = null, isConnected = false, myIdentity = null, waitingInterval = null;
+        const SESSION_DURATION = null;
+        const BASE_RAIN_START = 7 * 60 * 1000;
+
+        const loadingIntroText = "Negotiating with pixels. Please be patient";
+        const loadingStages = ["Killing zombie scripts","Loading Whisper (the slow part)","Still loading Whisper","Still loading Whisper","Warming up the language model","Connecting to LiveKit","Almost there"];
+        const stageColors = ["rgb(200, 100, 255)","rgb(255, 50, 150)","rgb(220, 130, 50)","rgb(220, 200, 50)","rgb(50, 220, 100)","rgb(220, 70, 100)","rgb(100, 150, 255)"];
+        let loadingInterval = null, loadingStageIndex = 0;
+
+        function startLoadingMessages() {
+            const loadingIntro = document.getElementById('loadingIntro');
+            const loadingStatus = document.getElementById('loadingStatus');
+            loadingStageIndex = 0;
+            loadingIntro.textContent = loadingIntroText;
+            function showStage() {
+                if (loadingStageIndex < loadingStages.length) {
+                    const msg = loadingStages[loadingStageIndex]; const color = stageColors[loadingStageIndex];
+                    loadingStatus.innerHTML = '<span style="color:' + color + '">' + msg + '<span class="dot">.</span><span class="dot">.</span><span class="dot">.</span></span>';
+                    loadingStageIndex++;
+                } else { clearInterval(loadingInterval); loadingInterval = null; loadingIntro.textContent = ''; loadingStatus.innerHTML = ''; }
+            }
+            showStage();
+            loadingInterval = setInterval(showStage, 6300);
+        }
+        function stopLoadingMessages() { if (loadingInterval) { clearInterval(loadingInterval); loadingInterval = null; } document.getElementById('loadingIntro').textContent = ''; document.getElementById('loadingStatus').innerHTML = ''; }
+
+        const localVideo = document.getElementById('localVideo');
+        const processedVideo = document.getElementById('processedVideo');
+        const localPlaceholder = document.getElementById('localPlaceholder');
+        const processedPlaceholder = document.getElementById('processedPlaceholder');
+        const statusDiv = document.getElementById('status');
+        const timerDiv = document.getElementById('timer');
+        const connectBtn = document.getElementById('connectBtn');
+        const disconnectBtn = document.getElementById('disconnectBtn');
+
+        let audioContext = null, analyser = null, micMonitorInterval = null;
+        function startMicMonitor(stream) {
+            const micMeter = document.getElementById('micMeter'); const micBar = document.getElementById('micBar'); const micStatus = document.getElementById('micStatus');
+            micMeter.style.display = 'block';
+            try {
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                const source = audioContext.createMediaStreamSource(stream); analyser = audioContext.createAnalyser(); analyser.fftSize = 256; source.connect(analyser);
+                const dataArray = new Uint8Array(analyser.frequencyBinCount);
+                micMonitorInterval = setInterval(() => {
+                    analyser.getByteFrequencyData(dataArray);
+                    let sum = 0; for (let i = 0; i < dataArray.length; i++) sum += dataArray[i];
+                    const avg = sum / dataArray.length; const level = Math.min(100, (avg / 128) * 100);
+                    micBar.style.width = level + '%';
+                    if (level > 15) { micStatus.textContent = 'Mic working'; micStatus.className = 'mic-status good'; }
+                    else if (level > 2) { micStatus.textContent = 'Low - speak louder'; micStatus.className = 'mic-status low'; }
+                    else { micStatus.textContent = 'No audio - check mic'; micStatus.className = 'mic-status none'; }
+                }, 50);
+            } catch (e) { console.error('Mic monitor error:', e); micStatus.textContent = 'Mic monitor unavailable'; }
+        }
+        function stopMicMonitor() { if (micMonitorInterval) { clearInterval(micMonitorInterval); micMonitorInterval = null; } if (audioContext) { audioContext.close(); audioContext = null; } document.getElementById('micMeter').style.display = 'none'; }
+
+        async function connect() {
+            connectBtn.disabled = true; connectBtn.classList.remove('flicker-btn'); updateStatus('Checking availability...');
+            try {
+                updateStatus('Getting camera...');
+                localStream = await navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 1920 }, height: { ideal: 1080 } }, audio: true });
+                localVideo.srcObject = localStream; localPlaceholder.style.display = 'none';
+                startMicMonitor(localStream);
+                updateStatus('Connecting...');
+                const pubResponse = await fetch('/api/publisher-token');
+                if (pubResponse.status === 409) { showWaitingRoom(); return; }
+                if (!pubResponse.ok) throw new Error('Failed to get connection token');
+                const pubData = await pubResponse.json();
+                myIdentity = pubData.identity;
+                const sid = document.getElementById('eventSessionId'); if (sid) sid.textContent = myIdentity;
+                inputRoom = new LivekitClient.Room(ROOM_CONFIG);
+                inputRoom.on(LivekitClient.RoomEvent.Disconnected, (reason) => {
+                    debugLog(`INPUT ROOM DISCONNECTED: ${reason || 'unknown'}`, 'error');
+                    if (reason === 'DUPLICATE_IDENTITY' || reason === 'PARTICIPANT_REMOVED') { updateStatus(`Connection lost: ${getDisconnectReason(reason)}`, 'error'); showDisconnectOverlay(reason); if (isConnected) forceDisconnect('input-room-disconnected: ' + (reason || 'unknown')); }
+                    else { attemptAutoReconnect('input-disconnect: ' + (reason || 'unknown')); }
+                });
+                inputRoom.on(LivekitClient.RoomEvent.Reconnecting, () => { debugLog('Reconnecting...', 'warn'); updateStatus('Reconnecting...', 'warn'); });
+                inputRoom.on(LivekitClient.RoomEvent.Reconnected, () => { debugLog('Reconnected!', 'success'); updateStatus('Reconnected!', 'success'); });
+                inputRoom.on(LivekitClient.RoomEvent.SignalReconnecting, () => { debugLog('Signal reconnecting (token may be expiring)', 'warn'); });
+                await inputRoom.connect(pubData.url, pubData.token);
+                for (const track of localStream.getTracks()) { await inputRoom.localParticipant.publishTrack(track); }
+                startLoadingMessages();
+                const viewResponse = await fetch('/api/processed-viewer-token'); const viewData = await viewResponse.json();
+                outputRoom = new LivekitClient.Room(ROOM_CONFIG);
+                outputRoom.on(LivekitClient.RoomEvent.Disconnected, (reason) => { debugLog(`OUTPUT ROOM DISCONNECTED: ${reason || 'unknown'}`, 'error'); attemptAutoReconnect('output-disconnect: ' + (reason || 'unknown')); });
+                outputRoom.on(LivekitClient.RoomEvent.Reconnected, () => { debugLog('Output reconnected!', 'success'); });
+                outputRoom.on(LivekitClient.RoomEvent.SignalReconnecting, () => { debugLog('Output signal reconnecting (token may be expiring)', 'warn'); });
+                outputRoom.on(LivekitClient.RoomEvent.TrackSubscribed, (track, pub, participant) => { if (track.kind === LivekitClient.Track.Kind.Video) { track.attach(processedVideo); processedPlaceholder.style.display = 'none'; updateStatus('Connected - Viewing processed output'); } });
+                outputRoom.on(LivekitClient.RoomEvent.TrackUnsubscribed, (track) => { if (track.kind === LivekitClient.Track.Kind.Video) { track.detach(processedVideo); processedPlaceholder.style.display = 'flex'; processedPlaceholder.textContent = 'Waiting for processed feed...'; } });
+                await outputRoom.connect(viewData.url, viewData.token);
+                outputRoom.remoteParticipants.forEach((participant) => { participant.trackPublications.forEach((pub) => { if (pub.track && pub.track.kind === LivekitClient.Track.Kind.Video) { pub.track.attach(processedVideo); processedPlaceholder.style.display = 'none'; } }); });
+                isConnected = true; _autoReconnectAttempts = 0; startTime = Date.now(); timerInterval = setInterval(updateTimer, 1000);
+                setDot('dotInput', 'on'); setDot('dotOutput', 'on'); setDot('dotAPI', 'on');
+                document.getElementById('inputPanel').classList.add('connected');
+                document.getElementById('maestraPanel').style.display = 'block'; startSpeechRecognition();
+                runTemporalAnimation();
+                connectBtn.style.display = 'none'; disconnectBtn.style.display = 'inline-block'; updateStatus('Connected - Waiting for processed video...');
+            } catch (error) { console.error('Connection error:', error); updateStatus('Error: ' + error.message); cleanupLocal(); connectBtn.disabled = false; connectBtn.classList.add('flicker-btn'); }
+        }
+
+        function showWaitingRoom() {
+            const overlay = document.createElement('div'); overlay.className = 'waiting-overlay'; overlay.id = 'waitingOverlay';
+            overlay.innerHTML = `<h2>The Mirror's Echo is Currently in Use</h2><p>Another viewer is experiencing the installation. You'll be connected automatically when the room becomes available.</p><div class="wait-status" id="waitStatus">Checking availability...</div><button class="btn" style="margin-top: 2rem;" onclick="cancelWaiting()">Cancel</button>`;
+            document.body.appendChild(overlay); waitingInterval = setInterval(checkAndConnect, 5000);
+        }
+        async function checkAndConnect() {
+            const waitStatus = document.getElementById('waitStatus'); if (waitStatus) waitStatus.textContent = 'Checking availability...';
+            try {
+                const pubResponse = await fetch('/api/publisher-token');
+                if (pubResponse.status === 409) { if (waitStatus) waitStatus.textContent = 'Still waiting... another session is active.'; return; }
+                if (pubResponse.ok) {
+                    clearInterval(waitingInterval); waitingInterval = null;
+                    const overlay = document.getElementById('waitingOverlay'); if (overlay) overlay.remove();
+                    const pubData = await pubResponse.json(); myIdentity = pubData.identity;
+                    inputRoom = new LivekitClient.Room(ROOM_CONFIG);
+                    inputRoom.on(LivekitClient.RoomEvent.Disconnected, (reason) => { debugLog(`INPUT ROOM DISCONNECTED: ${reason || 'unknown'}`, 'error'); if (reason === 'DUPLICATE_IDENTITY' || reason === 'PARTICIPANT_REMOVED') { updateStatus(`Connection lost: ${getDisconnectReason(reason)}`, 'error'); showDisconnectOverlay(reason); if (isConnected) forceDisconnect('disconnected'); } else { attemptAutoReconnect('input-disconnect: ' + (reason || 'unknown')); } });
+                    inputRoom.on(LivekitClient.RoomEvent.Reconnecting, () => { debugLog('Reconnecting...', 'warn'); updateStatus('Reconnecting...', 'warn'); });
+                    inputRoom.on(LivekitClient.RoomEvent.Reconnected, () => { debugLog('Reconnected!', 'success'); updateStatus('Reconnected!', 'success'); });
+                    inputRoom.on(LivekitClient.RoomEvent.SignalReconnecting, () => { debugLog('Signal reconnecting (token may be expiring)', 'warn'); });
+                    await inputRoom.connect(pubData.url, pubData.token);
+                    for (const track of localStream.getTracks()) { await inputRoom.localParticipant.publishTrack(track); }
+                    startLoadingMessages();
+                    const viewResponse = await fetch('/api/processed-viewer-token'); const viewData = await viewResponse.json();
+                    outputRoom = new LivekitClient.Room(ROOM_CONFIG);
+                    outputRoom.on(LivekitClient.RoomEvent.Disconnected, (reason) => { debugLog(`OUTPUT ROOM DISCONNECTED: ${reason || 'unknown'}`, 'error'); attemptAutoReconnect('output-disconnect: ' + (reason || 'unknown')); });
+                    outputRoom.on(LivekitClient.RoomEvent.Reconnected, () => { debugLog('Output reconnected!', 'success'); });
+                    outputRoom.on(LivekitClient.RoomEvent.SignalReconnecting, () => { debugLog('Output signal reconnecting (token may be expiring)', 'warn'); });
+                    outputRoom.on(LivekitClient.RoomEvent.TrackSubscribed, (track, pub, participant) => { if (track.kind === LivekitClient.Track.Kind.Video) { track.attach(processedVideo); processedPlaceholder.style.display = 'none'; updateStatus('Connected - Viewing processed output'); } });
+                    await outputRoom.connect(viewData.url, viewData.token);
+                    outputRoom.remoteParticipants.forEach((participant) => { participant.trackPublications.forEach((pub) => { if (pub.track && pub.track.kind === LivekitClient.Track.Kind.Video) { pub.track.attach(processedVideo); processedPlaceholder.style.display = 'none'; } }); });
+                    isConnected = true; startTime = Date.now(); timerInterval = setInterval(updateTimer, 1000);
+                    document.getElementById('maestraPanel').style.display = 'block'; startSpeechRecognition();
+                    runTemporalAnimation();
+                    connectBtn.style.display = 'none'; disconnectBtn.style.display = 'inline-block'; updateStatus('Connected!');
+                }
+            } catch (error) { console.error('Check error:', error); if (waitStatus) waitStatus.textContent = 'Error checking... will retry.'; }
+        }
+        function cancelWaiting() { if (waitingInterval) { clearInterval(waitingInterval); waitingInterval = null; } const overlay = document.getElementById('waitingOverlay'); if (overlay) overlay.remove(); cleanupLocal(); connectBtn.disabled = false; connectBtn.classList.add('flicker-btn'); updateStatus('Cancelled'); }
+
+        async function manualDisconnect() { await forceDisconnect('manual'); window.location.href = '/licensing.html?session=complete'; }
+
+        async function attemptAutoReconnect(reason) {
+            if (_reconnectTimer) return; _autoReconnectAttempts++;
+            if (_autoReconnectAttempts > MAX_RECONNECT_ATTEMPTS) { debugLog(`Auto-reconnect failed after ${MAX_RECONNECT_ATTEMPTS} attempts`, 'error'); updateStatus('Connection lost. Click Connect Webcam to retry.', 'error'); showDisconnectOverlay('MAX_RETRIES'); forceDisconnect('max-retries'); return; }
+            const delay = Math.min(1000 * Math.pow(1.5, _autoReconnectAttempts - 1), 8000);
+            debugLog(`Self-healing: retry ${_autoReconnectAttempts}/${MAX_RECONNECT_ATTEMPTS} in ${(delay/1000).toFixed(1)}s (${reason})`, 'warn');
+            updateStatus(`Reconnecting (${_autoReconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})...`, 'warn');
+            if (inputRoom) { try { await inputRoom.disconnect(); } catch(e) {} inputRoom = null; }
+            if (outputRoom) { try { await outputRoom.disconnect(); } catch(e) {} outputRoom = null; }
+            _reconnectTimer = setTimeout(async () => {
+                _reconnectTimer = null;
+                try {
+                    if (!localStream || localStream.getTracks().every(t => t.readyState === 'ended')) {
+                        debugLog('Camera track died, re-acquiring...', 'warn');
+                        localStream = await navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 1920 }, height: { ideal: 1080 } }, audio: true });
+                        localVideo.srcObject = localStream; localPlaceholder.style.display = 'none';
+                    }
+                    const pubResponse = await fetch('/api/publisher-token'); if (!pubResponse.ok) throw new Error('Token fetch failed: ' + pubResponse.status);
+                    const pubData = await pubResponse.json(); myIdentity = pubData.identity;
+                    inputRoom = new LivekitClient.Room(ROOM_CONFIG);
+                    inputRoom.on(LivekitClient.RoomEvent.Disconnected, (reason) => { debugLog(`INPUT ROOM DISCONNECTED: ${reason || 'unknown'}`, 'error'); if (reason === 'DUPLICATE_IDENTITY' || reason === 'PARTICIPANT_REMOVED') { showDisconnectOverlay(reason); forceDisconnect('input-room-disconnected: ' + (reason || 'unknown')); } else { attemptAutoReconnect('input-disconnect: ' + (reason || 'unknown')); } });
+                    inputRoom.on(LivekitClient.RoomEvent.Reconnecting, () => { updateStatus('Reconnecting...', 'warn'); });
+                    inputRoom.on(LivekitClient.RoomEvent.Reconnected, () => { updateStatus('Reconnected!', 'success'); });
+                    await inputRoom.connect(pubData.url, pubData.token);
+                    for (const track of localStream.getTracks()) { await inputRoom.localParticipant.publishTrack(track); }
+                    const viewResponse = await fetch('/api/processed-viewer-token'); const viewData = await viewResponse.json();
+                    outputRoom = new LivekitClient.Room(ROOM_CONFIG);
+                    outputRoom.on(LivekitClient.RoomEvent.Disconnected, (reason) => { debugLog(`OUTPUT ROOM DISCONNECTED: ${reason || 'unknown'}`, 'error'); attemptAutoReconnect('output-disconnect: ' + (reason || 'unknown')); });
+                    outputRoom.on(LivekitClient.RoomEvent.TrackSubscribed, (track, pub, participant) => { if (track.kind === LivekitClient.Track.Kind.Video) { track.attach(processedVideo); processedPlaceholder.style.display = 'none'; updateStatus('Connected - Viewing processed output'); } });
+                    await outputRoom.connect(viewData.url, viewData.token);
+                    isConnected = true; _autoReconnectAttempts = 0; debugLog('Self-healed! Connection restored.', 'success'); updateStatus('Reconnected!', 'success');
+                } catch(e) { debugLog(`Reconnect attempt ${_autoReconnectAttempts} failed: ${e.message}`, 'error'); attemptAutoReconnect('retry-failed: ' + e.message); }
+            }, delay);
+        }
+
+        async function forceDisconnect(reason) {
+            console.log('Force disconnect, reason:', reason); isConnected = false;
+            ['dotAPI','dotWS','dotMicSt','dotSpeechSt','dotInput','dotOutput'].forEach(d => setDot(d, ''));
+            const ip = document.getElementById('inputPanel'); if (ip) ip.classList.remove('connected');
+            if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
+            if (sessionTimeout) { clearTimeout(sessionTimeout); sessionTimeout = null; }
+            if (_reconnectTimer) { clearTimeout(_reconnectTimer); _reconnectTimer = null; } _autoReconnectAttempts = 0;
+            if (myIdentity) { try { navigator.sendBeacon('/api/disconnect', JSON.stringify({ identity: myIdentity })); } catch (e) { fetch('/api/disconnect', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ identity: myIdentity }), keepalive: true }).catch(() => {}); } }
+            if (inputRoom) { try { await inputRoom.disconnect(); } catch(e) {} inputRoom = null; }
+            if (outputRoom) { try { await outputRoom.disconnect(); } catch(e) {} outputRoom = null; }
+            cleanupLocal(); myIdentity = null;
+        }
+        function cleanupLocal() { stopLoadingMessages(); stopMicMonitor(); stopSpeechRecognition(); document.getElementById('maestraPanel').style.display = 'none'; if (localStream) { localStream.getTracks().forEach(t => t.stop()); localStream = null; } localVideo.srcObject = null; processedVideo.srcObject = null; localPlaceholder.style.display = 'flex'; processedPlaceholder.style.display = 'flex'; processedPlaceholder.textContent = 'Processed feed will appear here'; startTime = null; }
+        function endSession() { console.log('Session manually ended'); forceDisconnect('manual'); }
+
+        window.addEventListener('beforeunload', (e) => { if (isConnected) forceDisconnect('beforeunload'); });
+        window.addEventListener('pagehide', () => { if (isConnected) forceDisconnect('pagehide'); });
+        window.addEventListener('unload', () => { if (isConnected) forceDisconnect('unload'); });
+
+        function getDisconnectReason(reason) { const reasons = { 'DUPLICATE_IDENTITY': 'Another session opened', 'PARTICIPANT_REMOVED': 'Session ended by server', 'ROOM_DELETED': 'Room closed', 'STATE_MISMATCH': 'Connection sync error', 'JOIN_FAILURE': 'Failed to join room', 'SIGNAL_CLOSE': 'Server connection lost', 'unknown': 'Connection interrupted' }; return reasons[reason] || reasons['unknown']; }
+        function showDisconnectOverlay(reason) {
+            const existing = document.getElementById('disconnectOverlay'); if (existing) existing.remove();
+            const friendlyReason = getDisconnectReason(reason); const overlay = document.createElement('div'); overlay.className = 'waiting-overlay'; overlay.id = 'disconnectOverlay';
+            overlay.innerHTML = `<h2 style="color: #ff6b6b;">Connection Lost</h2><p style="color: rgba(255,255,255,0.7); margin-bottom: 0.5rem;">${friendlyReason}</p><p style="opacity: 0.5; font-size: 0.7rem;">This can happen due to network issues or session timeout.</p><button class="btn" style="margin-top: 2rem;" onclick="location.reload()">Reconnect</button><p style="opacity: 0.3; font-size: 0.65rem; margin-top: 1rem;">Or wait a moment and try again</p>`;
+            document.body.appendChild(overlay);
+        }
+
+        function toggleDebugLog() { document.getElementById('debugLog').classList.toggle('visible'); }
+        function debugLog(msg, type = 'info') { const log = document.getElementById('debugLog'); const entry = document.createElement('div'); entry.className = 'log-entry ' + type; entry.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`; log.appendChild(entry); log.scrollTop = log.scrollHeight; console.log(`[${type.toUpperCase()}] ${msg}`); addEvent(msg, type); }
+
+        function addEvent(msg, type = 'info') {
+            const eventLog = document.getElementById('eventLog'); if (!eventLog) return;
+            const now = new Date(); const time = now.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            const entry = document.createElement('div'); entry.className = 'event-entry' + (type === 'error' ? ' error' : type === 'success' ? ' highlight' : '');
+            let eventType = 'SYS'; const m = msg.toLowerCase();
+            if (m.includes('speech') || m.includes('prompt') || m.includes('nlp') || m.includes('p5') || m.includes('noun')) eventType = 'NLP';
+            else if (m.includes('camera') || m.includes('input room') || m.includes('publish')) eventType = 'CAM';
+            else if (m.includes('processed') || m.includes('output room') || m.includes('remote')) eventType = 'OUT';
+            else if (m.includes('connect') || m.includes('token') || m.includes('livekit') || m.includes('room')) eventType = 'WRT';
+            else if (m.includes('mic') || m.includes('audio') || m.includes('maestra')) eventType = 'AUD';
+            entry.innerHTML = `<span class="event-time">${time}</span><span class="event-type">${eventType}</span>${msg}`;
+            eventLog.appendChild(entry); while (eventLog.children.length > 100) eventLog.removeChild(eventLog.firstChild); eventLog.scrollTop = eventLog.scrollHeight;
+        }
+        function setDot(id, state) { const dot = document.getElementById(id); if (!dot) return; dot.className = 'dot' + (state === 'on' ? ' on' : state === 'warn' ? ' warn' : state === 'err' ? ' err' : ''); }
+
+        function updateStatus(msg, type = '') { statusDiv.textContent = msg; statusDiv.className = type; debugLog(msg, type || 'info'); }
+        function updateTimer() { if (!startTime) return; const elapsed = Math.floor((Date.now() - startTime) / 1000); const min = Math.floor(elapsed / 60); const sec = elapsed % 60; timerDiv.textContent = `${String(min).padStart(2,'0')}:${String(sec).padStart(2,'0')}`; }
+        function toggleFullscreen() { const videoBox = document.getElementById('processedBox'); const video = document.getElementById('processedVideo'); const isFullscreen = document.fullscreenElement || document.webkitFullscreenElement; if (!isFullscreen) { const element = video.srcObject ? video : videoBox; if (element.requestFullscreen) element.requestFullscreen(); else if (element.webkitRequestFullscreen) element.webkitRequestFullscreen(); else if (element.webkitEnterFullscreen) element.webkitEnterFullscreen(); } else { if (document.exitFullscreen) document.exitFullscreen(); else if (document.webkitExitFullscreen) document.webkitExitFullscreen(); } }
+
+        const colorPresets = { 280: { name: 'Purple Dream', sat: 100, val: 80, glw: 90, depth: 70, opacity: 100 }, 320: { name: 'Hot Pink', sat: 100, val: 90, glw: 100, depth: 60, opacity: 100 }, 15: { name: 'Fire', sat: 100, val: 100, glw: 100, depth: 80, opacity: 100 }, 45: { name: 'Gold', sat: 90, val: 100, glw: 80, depth: 50, opacity: 100 }, 120: { name: 'Matrix', sat: 100, val: 60, glw: 100, depth: 90, opacity: 100 }, 180: { name: 'Ice', sat: 80, val: 90, glw: 70, depth: 40, opacity: 100 }, 220: { name: 'Deep Blue', sat: 100, val: 70, glw: 80, depth: 80, opacity: 100 }, 0: { name: 'Blood', sat: 100, val: 70, glw: 100, depth: 100, opacity: 100 } };
+
+        document.querySelectorAll('.palette-btn').forEach(btn => {
+            btn.onclick = function() {
+                const hue = +this.dataset.hue; const preset = colorPresets[hue] || { sat: 85, val: 50, glw: 60, depth: 50, opacity: 100 };
+                S.hue = hue; S.sat = preset.sat; S.val = preset.val; S.glw = preset.glw; S.depth = preset.depth; S.opacity = preset.opacity;
+                document.getElementById('chroma').value = hue; document.getElementById('chromaV').textContent = hue + '°';
+                document.getElementById('colorSlider').value = hue; document.getElementById('colorVal').textContent = hue + '°';
+                document.getElementById('sat').value = S.sat; document.getElementById('satV').textContent = S.sat + '%';
+                document.getElementById('val').value = S.val; document.getElementById('valV').textContent = S.val + '%';
+                document.getElementById('glw').value = S.glw; document.getElementById('glwV').textContent = S.glw;
+                document.getElementById('depth').value = S.depth; document.getElementById('depthV').textContent = S.depth;
+                document.getElementById('opacity').value = S.opacity; document.getElementById('opacityV').textContent = S.opacity;
+                document.querySelectorAll('.palette-btn').forEach(b => b.classList.remove('active')); this.classList.add('active');
+                updateColors(); sendSliders(); console.log('Applied preset:', preset.name, S);
+            };
+        });
+
+        document.getElementById('colorSlider').oninput = function() { S.hue = +this.value; document.getElementById('chroma').value = S.hue; document.getElementById('chromaV').textContent = S.hue + '°'; document.getElementById('colorVal').textContent = S.hue + '°'; document.querySelectorAll('.palette-btn').forEach(b => b.classList.remove('active')); updateColors(); sendSliders(); };
+        document.getElementById('temp').oninput = function() { S.temp = +this.value; document.getElementById('tempV').textContent = S.temp + '%'; sendSliders(); };
+        document.getElementById('spd').oninput = function() { S.spd = +this.value; document.getElementById('spdV').textContent = (S.spd / 10).toFixed(1) + 'x'; sendSliders(); };
+        document.getElementById('bump').oninput = function() { S.bump = +this.value; document.getElementById('bumpV').textContent = S.bump; sendSliders(); };
+        document.getElementById('depth').oninput = function() { S.depth = +this.value; document.getElementById('depthV').textContent = S.depth; sendSliders(); };
+        document.getElementById('gloss').oninput = function() { S.gloss = +this.value; document.getElementById('glossV').textContent = S.gloss; sendSliders(); };
+        document.getElementById('emboss').oninput = function() { S.emboss = +this.value; document.getElementById('embossV').textContent = S.emboss; sendSliders(); };
+        document.getElementById('halo').oninput = function() { S.halo = +this.value; document.getElementById('haloV').textContent = S.halo; sendSliders(); };
+        document.getElementById('shimmer').oninput = function() { S.shimmer = +this.value; document.getElementById('shimmerV').textContent = S.shimmer; sendSliders(); };
+        document.getElementById('opacity').oninput = function() { S.opacity = +this.value; document.getElementById('opacityV').textContent = S.opacity; sendSliders(); };
+        document.getElementById('velocity').oninput = function() { S.velocity = +this.value; document.getElementById('velocityV').textContent = S.velocity; sendSliders(); };
+        document.getElementById('photorealism').oninput = function() { S.photorealism = +this.value; document.getElementById('photorealismV').textContent = S.photorealism; sendSliders(); };
+        document.getElementById('chroma').oninput = function() { S.hue = +this.value; document.getElementById('chromaV').textContent = S.hue + '°'; document.getElementById('colorSlider').value = S.hue; document.getElementById('colorVal').textContent = S.hue + '°'; document.querySelectorAll('.palette-btn').forEach(b => b.classList.remove('active')); updateColors(); sendSliders(); };
+        document.getElementById('sat').oninput = function() { S.sat = +this.value; document.getElementById('satV').textContent = S.sat + '%'; sendSliders(); };
+        document.getElementById('val').oninput = function() { S.val = +this.value; document.getElementById('valV').textContent = S.val + '%'; sendSliders(); };
+        document.getElementById('sz').oninput = function() { S.sz = +this.value; document.getElementById('szV').textContent = S.sz; sendSliders(); };
+        document.getElementById('glw').oninput = function() { S.glw = +this.value; document.getElementById('glwV').textContent = S.glw; sendSliders(); };
+
+        let animationRunning = false;
+        const colors = ['rgba(255, 105, 180, 0.9)', 'rgba(138, 43, 226, 0.9)', 'rgba(75, 0, 130, 0.9)', 'rgba(0, 191, 255, 0.9)', 'rgba(127, 255, 212, 0.9)', 'rgba(255, 215, 0, 0.9)', 'rgba(255, 140, 0, 0.9)', 'rgba(255, 20, 147, 0.9)', 'rgba(147, 112, 219, 0.9)'];
+
+        function createRaindrop(progress) {
+            const drop = document.createElement('div'); drop.className = 'raindrop';
+            drop.style.left = Math.random() * window.innerWidth + 'px'; drop.style.top = Math.random() * window.innerHeight + 'px';
+            const color1 = colors[Math.floor(Math.random() * colors.length)]; const color2 = colors[Math.floor(Math.random() * colors.length)]; const color3 = colors[Math.floor(Math.random() * colors.length)];
+            const isTakeover = progress > 0.66;
+            let baseOpacity = isTakeover ? 0.4 + ((progress - 0.66) / 0.34 * 0.5) : 0.15 + (progress * 0.35);
+            baseOpacity = baseOpacity * (S.opacity / 50);
+            let sizeMultiplier = isTakeover ? 1.0 + ((progress - 0.66) / 0.34 * 0.8) : 1.5 - (progress * 0.5);
+            let duration = isTakeover ? 6 - ((progress - 0.66) / 0.34 * 2) + Math.random() * 3 : 10 - (progress * 4) + Math.random() * 4;
+            duration = duration / (S.spd / 10) / (1 + S.velocity / 100);
+            let glowIntensity = isTakeover ? 30 + (Math.pow((progress - 0.66) / 0.34, 1.5) * 120) : (15 + (progress * 50)) * (2.0 - (progress * 1.2));
+            let baseSize; const sizeRoll = Math.random();
+            if (isTakeover) { baseSize = sizeRoll < 0.2 ? 30 + Math.random() * 15 : sizeRoll < 0.5 ? 50 + Math.random() * 30 : 60 + Math.random() * 70; }
+            else { baseSize = sizeRoll < 0.3 ? 20 + Math.random() * 10 : sizeRoll < 0.7 ? 40 + Math.random() * 20 : 40 + Math.random() * 50; }
+            baseSize = baseSize * (S.sz / 50);
+            const finalSize = baseSize * sizeMultiplier; drop.style.width = finalSize + 'px'; drop.style.height = finalSize + 'px';
+            drop.style.background = `radial-gradient(circle at 40% 40%, ${color1.replace('0.9', String(baseOpacity))} 0%, ${color2.replace('0.9', String(baseOpacity * 0.7))} 30%, ${color3.replace('0.9', String(baseOpacity * 0.4))} 60%, transparent 100%)`;
+            const glowFinal = glowIntensity * (S.glw / 60);
+            const haloSize = (S.halo / 50) * finalSize * 0.8; const haloOpacity = baseOpacity * 0.3 * (S.halo / 50); const haloColor = color3.replace('0.9', String(haloOpacity));
+            drop.style.boxShadow = `0 0 ${glowFinal}px ${glowFinal * 0.4}px ${color1}, 0 0 ${glowFinal * 2}px ${glowFinal * 0.8}px ${color2}, 0 0 ${haloSize}px ${haloSize * 0.6}px ${haloColor}`;
+            const brightness = 0.5 + (S.val / 100); drop.style.filter = `brightness(${brightness})`;
+            drop.style.animationDuration = duration + 's'; document.body.appendChild(drop);
+            setTimeout(() => { if (drop.parentNode) drop.parentNode.removeChild(drop); }, duration * 1000);
+        }
+
+        function runTemporalAnimation() {
+            if (!startTime || animationRunning) return; animationRunning = true;
+            function animate() {
+                if (!startTime || !isConnected) { animationRunning = false; return; }
+                const elapsed = Date.now() - startTime;
+                const RAIN_START = BASE_RAIN_START * (1 - S.temp / 100);
+                if (elapsed >= RAIN_START || S.temp > 20) {
+                    let progress; if (elapsed >= RAIN_START) { progress = Math.min((elapsed - RAIN_START) / (SESSION_DURATION - RAIN_START), 1.0); } else { progress = 0.1 * (S.temp / 100); }
+                    const exponentialGrowth = Math.pow(progress, 2.5);
+                    let dropProbability = 0.03 * (1 + exponentialGrowth * 30);
+                    dropProbability *= (1 + S.temp / 25); dropProbability *= (S.spd / 10) * (1 + S.velocity / 100);
+                    if (progress > 0.66) { dropProbability *= 1 + ((progress - 0.66) / 0.34 * 6); }
+                    if (Math.random() < dropProbability) { createRaindrop(progress); }
+                }
+                requestAnimationFrame(animate);
+            }
+            animate();
+        }
+    </script>
+</body>
+</html>
