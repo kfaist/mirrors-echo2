@@ -723,6 +723,7 @@
 
             let _nounDebounce = null;
             let _fullTranscript = '';
+            const MAX_P6_WORDS = 50; // rolling window — oldest words drop off
             recognition.onresult = (e) => {
                 let interim = '', final = '';
                 for (let i = e.resultIndex; i < e.results.length; i++) {
@@ -731,20 +732,21 @@
                     else { interim += t; }
                 }
 
-                // Accumulate final speech into full transcript
+                // Accumulate final speech
                 if (final.trim()) _fullTranscript += ' ' + final.trim();
 
-                // p6: ALWAYS show full transcript + current interim in real-time
-                const fullLive = (_fullTranscript + ' ' + interim).trim();
-                if (fullLive) {
-                    document.getElementById('p6Display').textContent = 'photorealistic ' + fullLive;
-                    document.getElementById('interimText').textContent = fullLive;
-                }
+                // p6: rolling window of last 50 words + live interim — real-time, every event
+                const allWords = (_fullTranscript + ' ' + interim).trim().split(/\s+/);
+                const rolling = allWords.slice(-MAX_P6_WORDS).join(' ');
+                document.getElementById('p6Display').textContent = 'photorealistic ' + rolling;
 
-                // P5: send FULL accumulated transcript to Haiku on every final
-                // Haiku sees entire conversation, picks out the latest concrete noun
+                // interimText: current live speech fragment
+                const live = (interim || final).trim();
+                if (live) document.getElementById('interimText').textContent = live;
+
+                // P5: send last 50 words to Haiku on every final
                 if (final.trim()) {
-                    submitTranscript(_fullTranscript.trim());
+                    submitTranscript(rolling);
                 }
             };
 
