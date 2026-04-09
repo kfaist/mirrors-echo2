@@ -721,68 +721,60 @@
                 document.getElementById('dotSpeech').style.background = '#6bcb77';
             };
 
-            let _nounDebounce = null;
-            let _fullTranscript = '';
-            const MAX_P6_WORDS = 9999; // full transcript — no limit
-            // Strip spelled-out punctuation from Chrome speech recognition
+            let _allText = ''; // EVERYTHING ever said, persists forever
             function cleanPunctuation(text) {
                 return text
-                    .replace(/question mark/gi, '?')
-                    .replace(/exclamation point/gi, '!')
-                    .replace(/exclamation mark/gi, '!')
-                    .replace(/period/gi, '.')
-                    .replace(/comma/gi, ',')
-                    .replace(/colon/gi, ':')
-                    .replace(/semicolon/gi, ';')
-                    .replace(/dot dot dot/gi, '...')
-                    .replace(/dot dot/gi, '..')
-                    .replace(/dot/gi, '.')
-                    .replace(/hyphen/gi, '-')
-                    .replace(/dash/gi, '-')
-                    .replace(/open quote/gi, '"')
-                    .replace(/close quote/gi, '"')
-                    .replace(/quote/gi, '"')
-                    .replace(/new line/gi, ' ')
-                    .replace(/new paragraph/gi, ' ')
+                    .replace(/\bquestion mark\b/gi, '?')
+                    .replace(/\bexclamation point\b/gi, '!')
+                    .replace(/\bexclamation mark\b/gi, '!')
+                    .replace(/\bperiod\b/gi, '.')
+                    .replace(/\bcomma\b/gi, ',')
+                    .replace(/\bcolon\b/gi, ':')
+                    .replace(/\bsemicolon\b/gi, ';')
+                    .replace(/\bdot dot dot\b/gi, '...')
+                    .replace(/\bdot dot\b/gi, '..')
+                    .replace(/\bhyphen\b/gi, '-')
+                    .replace(/\bdash\b/gi, '-')
+                    .replace(/\bopen quote\b/gi, '"')
+                    .replace(/\bclose quote\b/gi, '"')
+                    .replace(/\bnew line\b/gi, ' ')
+                    .replace(/\bnew paragraph\b/gi, ' ')
                     .replace(/\s+/g, ' ').trim();
             }
 
-            let _prevSessions = ''; // text from previous recognition sessions
             recognition.onresult = (e) => {
-                // Build text from ALL results in current session
-                let currentAll = '';
-                let hasNewFinal = false;
+                // On every final, append to _allText permanently
+                for (let i = e.resultIndex; i < e.results.length; i++) {
+                    if (e.results[i].isFinal) {
+                        _allText += ' ' + e.results[i][0].transcript;
+                    }
+                }
+
+                // Get current interim (words being spoken right now)
+                let interim = '';
                 for (let i = 0; i < e.results.length; i++) {
-                    currentAll += e.results[i][0].transcript + ' ';
+                    if (!e.results[i].isFinal) {
+                        interim += e.results[i][0].transcript + ' ';
+                    }
                 }
+
+                // DISPLAY: _allText + interim = everything + live speech
+                const everything = cleanPunctuation((_allText + ' ' + interim).trim());
+                const words = everything.split(/\s+/);
+                const last15 = words.slice(-15).join(' ');
+
+                // p6: last 15 words FIFO — updates every speech event
+                document.getElementById('p6Display').textContent = 'photorealistic ' + last15;
+                document.getElementById('interimText').textContent = last15;
+
+                // P5: on every new final, send last 15 to Haiku
                 if (e.results[e.resultIndex] && e.results[e.resultIndex].isFinal) {
-                    hasNewFinal = true;
-                }
-
-                // FULL display = previous sessions + current session (all text)
-                const fullDisplay = cleanPunctuation((_prevSessions + ' ' + currentAll).trim());
-
-                // p6: FIFO — last 15 words only, oldest drop off as new arrive
-                if (fullDisplay) {
-                    const allWords = fullDisplay.split(/\s+/);
-                    const last15 = allWords.slice(-15).join(' ');
-                    document.getElementById('p6Display').textContent = 'photorealistic ' + last15;
-                    document.getElementById('interimText').textContent = last15;
-                }
-
-                // P5: send last 15 words to Haiku on each new final
-                if (hasNewFinal) {
-                    const words = fullDisplay.split(/\s+/);
-                    const recent = words.slice(-15).join(' ');
-                    submitTranscript(recent);
+                    submitTranscript(last15);
                 }
             };
 
-            // When recognition restarts, save current session text
+            // _allText persists across restarts — no saving needed
             recognition.onend = () => {
-                // Save all finalized text from the session that just ended
-                // (We can't access e.results here, so we save _fullTranscript state)
-                _prevSessions = document.getElementById('interimText').textContent || _prevSessions;
                 if ((isConnected || micTestActive) && speechActive) {
                     try { recognition.start(); } catch(e) {}
                 } else {
@@ -814,30 +806,27 @@
         let _lastNoun = '';
         async function submitTranscript(text) {
             try {
-                // Send last ~15 words to Haiku (most recent phrase)
-                const words = text.split(/\s+/);
-                const recent = words.slice(-15).join(' ');
-                
                 const nounResp = await fetch('https://maestra-monitor-production.up.railway.app/api/nouns', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ text: recent })
+                    body: JSON.stringify({ text: text })
                 });
                 const nounData = await nounResp.json();
                 
-                if (nounData.noun && nounData.noun !== _lastNoun) {
-                    _lastNoun = nounData.noun;
+                if (nounData.noun) {
+                    // ALWAYS update P5 with latest noun — no skipping
                     document.getElementById('p5Word').textContent = nounData.noun;
-                    console.log('[P5] CONCRETE NOUN:', nounData.noun);
+                    console.log('[P5] ' + nounData.noun);
                     
-                    // Send noun to Maestra for SD
-                    fetch(MAESTRA_URL + '/transcript', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ text: nounData.noun, source: 'browser-speech' })
-                    }).catch(() => {});
-                } else if (!nounData.noun) {
-                    console.log('[P5] no noun in:', recent.slice(-60));
+                    // Send to SD if it's a NEW noun
+                    if (nounData.noun !== _lastNoun) {
+                        _lastNoun = nounData.noun;
+                        fetch(MAESTRA_URL + '/transcript', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ text: nounData.noun, source: 'browser-speech' })
+                        }).catch(() => {});
+                    }
                 }
             } catch(e) {
                 console.log('Transcript error:', e);
