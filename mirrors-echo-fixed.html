@@ -748,29 +748,36 @@
             }
 
             recognition.onresult = (e) => {
-                let interim = '', final = '';
-                for (let i = e.resultIndex; i < e.results.length; i++) {
-                    const t = e.results[i][0].transcript;
-                    if (e.results[i].isFinal) { final += t; }
-                    else { interim += t; }
+                // Rebuild FULL text from ALL recognition results (not just current event)
+                // This gives smooth flowing text, not just 2-3 word fragments
+                let fullText = '';
+                let hasFinalThisEvent = false;
+                for (let i = 0; i < e.results.length; i++) {
+                    fullText += e.results[i][0].transcript + ' ';
+                    if (i >= e.resultIndex && e.results[i].isFinal) hasFinalThisEvent = true;
+                }
+                fullText = cleanPunctuation(fullText.trim());
+
+                // Update _fullTranscript only with finalized text (for persistence across restarts)
+                if (hasFinalThisEvent) {
+                    let finalOnly = '';
+                    for (let i = 0; i < e.results.length; i++) {
+                        if (e.results[i].isFinal) finalOnly += e.results[i][0].transcript + ' ';
+                    }
+                    _fullTranscript = cleanPunctuation(finalOnly.trim());
                 }
 
-                // Accumulate final speech
-                if (final.trim()) _fullTranscript += ' ' + cleanPunctuation(final.trim());
+                // p6: show FULL flowing transcript in real-time
+                if (fullText) {
+                    document.getElementById('p6Display').textContent = 'photorealistic ' + fullText;
+                    document.getElementById('interimText').textContent = fullText;
+                }
 
-                // p6: rolling window of last 15 words + live interim — real-time
-                const allText = cleanPunctuation((_fullTranscript + ' ' + interim).trim());
-                const allWords = allText.split(/\s+/);
-                const rolling = allWords.slice(-MAX_P6_WORDS).join(' ');
-                if (rolling) document.getElementById('p6Display').textContent = 'photorealistic ' + rolling;
-
-                // interimText: current live speech fragment (cleaned)
-                const live = cleanPunctuation((interim || final).trim());
-                if (live) document.getElementById('interimText').textContent = live;
-
-                // P5: send last 50 words to Haiku on every final
-                if (final.trim()) {
-                    submitTranscript(rolling);
+                // P5: send last 15 words to Haiku when speech finalizes
+                if (hasFinalThisEvent) {
+                    const words = fullText.split(/\s+/);
+                    const recent = words.slice(-15).join(' ');
+                    submitTranscript(recent);
                 }
             };
 
