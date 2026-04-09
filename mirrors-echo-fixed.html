@@ -782,9 +782,9 @@
         let _lastNoun = '';
         async function submitTranscript(text) {
             try {
-                // Send last ~50 words to Haiku (enough context, not too long)
+                // Send last ~15 words to Haiku (most recent phrase)
                 const words = text.split(/\s+/);
-                const recent = words.slice(-50).join(' ');
+                const recent = words.slice(-15).join(' ');
                 
                 const nounResp = await fetch('https://maestra-monitor-production.up.railway.app/api/nouns', {
                     method: 'POST',
