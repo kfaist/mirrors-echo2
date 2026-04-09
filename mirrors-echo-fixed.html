@@ -682,17 +682,7 @@
                     const msg = JSON.parse(e.data);
                     if (msg.type === 'state_changed' && msg.entity_slug === 'td-audio-reactive') {
                         const st = msg.current_state || {};
-                        if (st.p5 && st.p5 !== _lastNoun) {
-                            fetch('https://maestra-monitor-production.up.railway.app/api/nouns', {
-                                method: 'POST', headers: {'Content-Type':'application/json'},
-                                body: JSON.stringify({text: st.p5})
-                            }).then(r=>r.json()).then(d=>{
-                                if(d.noun && d.noun !== _lastNoun) {
-                                    _lastNoun = d.noun;
-                                    document.getElementById('p5Word').textContent = d.noun;
-                                }
-                            }).catch(()=>{});
-                        }
+                        // WS state updates — do NOT update p5 (only speech does that)
                         if (st.p6) document.getElementById('p6Display').textContent = st.p6;
                     }
                 } catch(err) {}
@@ -709,14 +699,7 @@
                 const r = await fetch(MAESTRA_URL + '/entities/by-slug/td-audio-reactive');
                 const d = await r.json();
                 maestraEntityId = d.id;
-                if (d.state && d.state.p5) {
-                    fetch('https://maestra-monitor-production.up.railway.app/api/nouns', {
-                        method: 'POST', headers: {'Content-Type':'application/json'},
-                        body: JSON.stringify({text: d.state.p5})
-                    }).then(r=>r.json()).then(nd=>{
-                        if(nd.noun) document.getElementById('p5Word').textContent = nd.noun;
-                    }).catch(()=>{});
-                }
+                // Init state — do NOT update p5 (only speech does that)
                 if (d.state && d.state.p6) document.getElementById('p6Display').textContent = d.state.p6;
             } catch(e) {
                 console.log('Maestra entity fetch failed:', e);
@@ -732,7 +715,7 @@
             }
             recognition = new SR();
             recognition.continuous = true;
-            recognition.interimResults = true;
+            recognition.interimResults = false;
             recognition.lang = 'en-US';
             recognition.maxAlternatives = 1;
 
@@ -790,7 +773,12 @@
         }
 
         let _lastNoun = '';
+        let _lastSubmitTime = 0;
+        const MIN_INTERVAL = 3000; // minimum 3 seconds between updates
         async function submitTranscript(text) {
+            const now = Date.now();
+            if (now - _lastSubmitTime < MIN_INTERVAL) return;
+            _lastSubmitTime = now;
             try {
                 // ALWAYS send full text to Maestra for SD pipeline (continuous)
                 document.getElementById('p6Display').textContent = 'photorealistic ' + text;
