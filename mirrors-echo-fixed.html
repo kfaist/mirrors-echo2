@@ -802,7 +802,7 @@
 
         let _lastNoun = '';
         let _lastSubmitTime = 0;
-        const MIN_INTERVAL = 3000; // minimum 3 seconds between updates
+        const MIN_INTERVAL = 0; // no throttle — real-time
         async function submitTranscript(text) {
             const now = Date.now();
             if (now - _lastSubmitTime < MIN_INTERVAL) return;
