@@ -723,7 +723,7 @@
 
             let _nounDebounce = null;
             let _fullTranscript = '';
-            const MAX_P6_WORDS = 50; // rolling window — oldest words drop off
+            const MAX_P6_WORDS = 15; // rolling window — last 15 words
             // Strip spelled-out punctuation from Chrome speech recognition
             function cleanPunctuation(text) {
                 return text
@@ -758,13 +758,14 @@
                 // Accumulate final speech
                 if (final.trim()) _fullTranscript += ' ' + cleanPunctuation(final.trim());
 
-                // p6: rolling window of last 50 words + live interim — real-time, every event
-                const allWords = (_fullTranscript + ' ' + interim).trim().split(/\s+/);
+                // p6: rolling window of last 15 words + live interim — real-time
+                const allText = cleanPunctuation((_fullTranscript + ' ' + interim).trim());
+                const allWords = allText.split(/\s+/);
                 const rolling = allWords.slice(-MAX_P6_WORDS).join(' ');
-                document.getElementById('p6Display').textContent = 'photorealistic ' + rolling;
+                if (rolling) document.getElementById('p6Display').textContent = 'photorealistic ' + rolling;
 
-                // interimText: current live speech fragment
-                const live = (interim || final).trim();
+                // interimText: current live speech fragment (cleaned)
+                const live = cleanPunctuation((interim || final).trim());
                 if (live) document.getElementById('interimText').textContent = live;
 
                 // P5: send last 50 words to Haiku on every final
