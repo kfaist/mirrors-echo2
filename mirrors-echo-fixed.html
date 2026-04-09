@@ -741,8 +741,7 @@
                 document.getElementById('dotSpeech').style.background = '#6bcb77';
             };
 
-            let _interimTimer = null;
-            let _lastInterim = '';
+            let _debounceTimer = null;
             recognition.onresult = (e) => {
                 let interim = '', final = '';
                 for (let i = e.resultIndex; i < e.results.length; i++) {
@@ -750,22 +749,14 @@
                     if (e.results[i].isFinal) { final += t; }
                     else { interim += t; }
                 }
-                document.getElementById('interimText').textContent = interim ? 'listening...' : '';
+                document.getElementById('interimText').textContent = (interim || final) ? 'listening...' : '';
 
-                // Send INTERIM results immediately with 300ms debounce
-                if (interim.trim() && interim.trim() !== _lastInterim) {
-                    _lastInterim = interim.trim();
-                    clearTimeout(_interimTimer);
-                    _interimTimer = setTimeout(() => {
-                        submitTranscript(_lastInterim);
-                    }, 300);
-                }
-
-                // Send final results instantly (cancels any pending interim)
+                // 2s debounce — only fire after speaker pauses
                 if (final.trim()) {
-                    clearTimeout(_interimTimer);
-                    _lastInterim = '';
-                    submitTranscript(final.trim());
+                    clearTimeout(_debounceTimer);
+                    _debounceTimer = setTimeout(() => {
+                        submitTranscript(final.trim());
+                    }, 2000);
                 }
             };
 
