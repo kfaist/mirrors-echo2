@@ -725,6 +725,7 @@
             };
 
             let _nounDebounce = null;
+            let _fullTranscript = '';
             recognition.onresult = (e) => {
                 let interim = '', final = '';
                 for (let i = e.resultIndex; i < e.results.length; i++) {
@@ -733,12 +734,16 @@
                     else { interim += t; }
                 }
 
-                // Show real-time transcription as you speak
-                const live = (final || interim).trim();
-                if (live) {
-                    document.getElementById('interimText').textContent = live;
-                    document.getElementById('p6Display').textContent = 'photorealistic ' + live;
-                }
+                // Accumulate final speech into full transcript
+                if (final.trim()) _fullTranscript += ' ' + final.trim();
+
+                // Show live speech in interimText (current fragment)
+                const live = (interim || final).trim();
+                if (live) document.getElementById('interimText').textContent = live;
+
+                // p6: show "photorealistic" + full accumulated transcript + current interim
+                const fullLive = (_fullTranscript + ' ' + interim).trim();
+                if (fullLive) document.getElementById('p6Display').textContent = 'photorealistic ' + fullLive;
 
                 // Only extract nouns + push to SD on final speech (2s debounce)
                 if (final.trim()) {
@@ -787,7 +792,7 @@
             _lastSubmitTime = now;
             try {
                 // Show full transcription
-                document.getElementById('p6Display').textContent = 'photorealistic ' + text;
+                document.getElementById('p6Display').textContent = 'photorealistic ' + _fullTranscript.trim();
                 
                 // Extract concrete noun FIRST
                 const nounResp = await fetch('https://maestra-monitor-production.up.railway.app/api/nouns', {
