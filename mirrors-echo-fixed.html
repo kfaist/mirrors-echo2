@@ -753,20 +753,8 @@
                     }
                 }
 
-                // Extract nouns immediately on final speech — P5 updates instantly
+                // Only send final speech to Haiku — P5 ONLY updates with concrete/compound nouns
                 if (final.trim()) {
-                    // Immediately extract noun for P5 display
-                    fetch('https://maestra-monitor-production.up.railway.app/api/nouns', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ text: final.trim() })
-                    }).then(r => r.json()).then(d => {
-                        if (d.noun) {
-                            document.getElementById('p5Word').textContent = d.noun;
-                        }
-                    }).catch(() => {});
-
-                    // Push to SD immediately — no debounce
                     submitTranscript(final.trim());
                 }
             };
@@ -823,13 +811,16 @@
                     _lastNoun = nounData.noun;
                     document.getElementById('p5Word').textContent = nounData.noun;
                     document.getElementById('interimText').textContent = '';
+                    console.log('[P5] CONCRETE NOUN:', nounData.noun, '← from:', text);
                     
-                    // Send the FILTERED NOUN to Maestra so SD gets it in Promptdict5concept
+                    // Send the FILTERED NOUN to Maestra so SD gets it
                     fetch(MAESTRA_URL + '/transcript', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ text: nounData.noun, source: 'browser-speech' })
                     }).catch(() => {});
+                } else {
+                    console.log('[P5] BLOCKED (not concrete/compound):', text);
                 }
             } catch(e) {
                 console.log('Transcript submit error:', e);
