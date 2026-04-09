@@ -724,7 +724,6 @@
                 document.getElementById('dotSpeech').style.background = '#6bcb77';
             };
 
-            let _debounceTimer = null;
             recognition.onresult = (e) => {
                 let interim = '', final = '';
                 for (let i = e.resultIndex; i < e.results.length; i++) {
@@ -734,12 +733,9 @@
                 }
                 document.getElementById('interimText').textContent = (interim || final) ? 'listening...' : '';
 
-                // 2s debounce — only fire after speaker pauses
+                // Submit final immediately — no debounce
                 if (final.trim()) {
-                    clearTimeout(_debounceTimer);
-                    _debounceTimer = setTimeout(() => {
-                        submitTranscript(final.trim());
-                    }, 2000);
+                    submitTranscript(final.trim());
                 }
             };
 
@@ -791,7 +787,7 @@
                 });
                 const nounData = await nounResp.json();
                 
-                if (nounData.noun && nounData.noun !== _lastNoun) {
+                if (nounData.noun) {
                     _lastNoun = nounData.noun;
                     document.getElementById('p5Word').textContent = nounData.noun;
                     document.getElementById('interimText').textContent = '';
