@@ -763,11 +763,8 @@
                         }
                     }).catch(() => {});
 
-                    // Debounce the Maestra SD push (2s after last speech)
-                    clearTimeout(_nounDebounce);
-                    _nounDebounce = setTimeout(() => {
-                        submitTranscript(final.trim());
-                    }, 2000);
+                    // Push to SD immediately — no debounce
+                    submitTranscript(final.trim());
                 }
             };
 
