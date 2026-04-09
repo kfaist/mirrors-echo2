@@ -582,7 +582,7 @@
                 <div id="p5Word" style="font-size:1.5rem;font-weight:300;letter-spacing:0.08em;color:rgb(80,220,220);min-height:2rem;animation:textglow 3s ease-in-out infinite;">—</div>
             </div>
             <div id="interimText" style="font-size:0.7rem;opacity:0.4;margin-top:0.5rem;min-height:1rem;text-align:center;"></div>
-            <div id="p6Display" style="font-size:0.65rem;opacity:0.5;margin-top:0.5rem;text-align:center;color:rgba(255,255,255,0.6);font-family:'JetBrains Mono',monospace;">waiting for speech...</div>
+            <div id="p6Display" style="font-size:0.65rem;opacity:0.5;margin-top:0.5rem;text-align:center;color:rgba(255,255,255,0.6);font-family:'JetBrains Mono',monospace;transition:opacity 0.3s ease;">waiting for speech...</div>
         </div>
 
         <div class="status-bar">
@@ -723,6 +723,8 @@
 
             let _nounDebounce = null;
             let _fullTranscript = '';
+            let _p6Timer = null;
+            let _latestP6 = '';
             recognition.onresult = (e) => {
                 let interim = '', final = '';
                 for (let i = e.resultIndex; i < e.results.length; i++) {
@@ -738,9 +740,18 @@
                 const live = (interim || final).trim();
                 if (live) document.getElementById('interimText').textContent = live;
 
-                // p6: show "photorealistic" + full accumulated transcript + current interim
+                // p6: buffer updates — only refresh every 1.5s so text flows smoothly
                 const fullLive = (_fullTranscript + ' ' + interim).trim();
-                if (fullLive) document.getElementById('p6Display').textContent = 'photorealistic ' + fullLive;
+                if (fullLive) {
+                    _latestP6 = 'photorealistic ' + fullLive;
+                    if (!_p6Timer) {
+                        document.getElementById('p6Display').textContent = _latestP6;
+                        _p6Timer = setTimeout(() => {
+                            document.getElementById('p6Display').textContent = _latestP6;
+                            _p6Timer = null;
+                        }, 1500);
+                    }
+                }
 
                 // Extract nouns immediately on final speech — P5 updates instantly
                 if (final.trim()) {
