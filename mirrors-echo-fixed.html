@@ -762,10 +762,12 @@
                 // FULL display = previous sessions + current session (all text)
                 const fullDisplay = cleanPunctuation((_prevSessions + ' ' + currentAll).trim());
 
-                // p6: show FULL flowing transcript — every word ever said
+                // p6: FIFO — last 15 words only, oldest drop off as new arrive
                 if (fullDisplay) {
-                    document.getElementById('p6Display').textContent = 'photorealistic ' + fullDisplay;
-                    document.getElementById('interimText').textContent = fullDisplay;
+                    const allWords = fullDisplay.split(/\s+/);
+                    const last15 = allWords.slice(-15).join(' ');
+                    document.getElementById('p6Display').textContent = 'photorealistic ' + last15;
+                    document.getElementById('interimText').textContent = last15;
                 }
 
                 // P5: send last 15 words to Haiku on each new final
@@ -1808,4 +1810,4 @@
         }
     </script>
 </body>
-</html><!-- force rebuild 1775765379 -->
+</html>
