@@ -750,8 +750,20 @@
                 const fullLive = (_fullTranscript + ' ' + interim).trim();
                 if (fullLive) document.getElementById('p6Display').textContent = 'photorealistic ' + fullLive;
 
-                // Only extract nouns + push to SD on final speech (2s debounce)
+                // Extract nouns immediately on final speech — P5 updates instantly
                 if (final.trim()) {
+                    // Immediately extract noun for P5 display
+                    fetch('https://maestra-monitor-production.up.railway.app/api/nouns', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ text: final.trim() })
+                    }).then(r => r.json()).then(d => {
+                        if (d.noun) {
+                            document.getElementById('p5Word').textContent = d.noun;
+                        }
+                    }).catch(() => {});
+
+                    // Debounce the Maestra SD push (2s after last speech)
                     clearTimeout(_nounDebounce);
                     _nounDebounce = setTimeout(() => {
                         submitTranscript(final.trim());
