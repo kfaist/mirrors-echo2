@@ -723,8 +723,7 @@
 
             let _nounDebounce = null;
             let _fullTranscript = '';
-            let _p6Timer = null;
-            let _latestP6 = '';
+            let _recentFinals = []; // rolling buffer of last few finals for Haiku
             recognition.onresult = (e) => {
                 let interim = '', final = '';
                 for (let i = e.resultIndex; i < e.results.length; i++) {
@@ -736,26 +735,25 @@
                 // Accumulate final speech into full transcript
                 if (final.trim()) _fullTranscript += ' ' + final.trim();
 
-                // Show live speech in interimText (current fragment)
+                // p6: ALWAYS update in real-time — no throttle, no delay
+                // Shows "photorealistic" + everything said so far + current interim
+                const fullLive = (_fullTranscript + ' ' + interim).trim();
+                if (fullLive) {
+                    document.getElementById('p6Display').textContent = 'photorealistic ' + fullLive;
+                }
+
+                // interimText: show current live fragment
                 const live = (interim || final).trim();
                 if (live) document.getElementById('interimText').textContent = live;
 
-                // p6: buffer updates — only refresh every 1.5s so text flows smoothly
-                const fullLive = (_fullTranscript + ' ' + interim).trim();
-                if (fullLive) {
-                    _latestP6 = 'photorealistic ' + fullLive;
-                    if (!_p6Timer) {
-                        document.getElementById('p6Display').textContent = _latestP6;
-                        _p6Timer = setTimeout(() => {
-                            document.getElementById('p6Display').textContent = _latestP6;
-                            _p6Timer = null;
-                        }, 1500);
-                    }
-                }
-
-                // Only send final speech to Haiku — P5 ONLY updates with concrete/compound nouns
+                // P5: accumulate recent finals, send combined text to Haiku
+                // This gives Haiku enough context to find nouns in flowing speech
                 if (final.trim()) {
-                    submitTranscript(final.trim());
+                    _recentFinals.push(final.trim());
+                    // Keep last 5 finals (~10-15 seconds of speech)
+                    if (_recentFinals.length > 5) _recentFinals.shift();
+                    const combined = _recentFinals.join(' ');
+                    submitTranscript(combined);
                 }
             };
 
@@ -789,17 +787,9 @@
         }
 
         let _lastNoun = '';
-        let _lastSubmitTime = 0;
-        const MIN_INTERVAL = 0; // no throttle — real-time
         async function submitTranscript(text) {
-            const now = Date.now();
-            if (now - _lastSubmitTime < MIN_INTERVAL) return;
-            _lastSubmitTime = now;
             try {
-                // Show full transcription
-                document.getElementById('p6Display').textContent = 'photorealistic ' + _fullTranscript.trim();
-                
-                // Extract concrete noun FIRST
+                // Send combined recent speech to Haiku for noun extraction
                 const nounResp = await fetch('https://maestra-monitor-production.up.railway.app/api/nouns', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -807,10 +797,9 @@
                 });
                 const nounData = await nounResp.json();
                 
-                if (nounData.noun) {
+                if (nounData.noun && nounData.noun !== _lastNoun) {
                     _lastNoun = nounData.noun;
                     document.getElementById('p5Word').textContent = nounData.noun;
-                    document.getElementById('interimText').textContent = '';
                     console.log('[P5] CONCRETE NOUN:', nounData.noun, '← from:', text);
                     
                     // Send the FILTERED NOUN to Maestra so SD gets it
@@ -820,10 +809,10 @@
                         body: JSON.stringify({ text: nounData.noun, source: 'browser-speech' })
                     }).catch(() => {});
                 } else {
-                    console.log('[P5] BLOCKED (not concrete/compound):', text);
+                    console.log('[P5] BLOCKED:', text.slice(0, 40));
                 }
             } catch(e) {
-                console.log('Transcript submit error:', e);
+                console.log('Transcript error:', e);
             }
         }
 
