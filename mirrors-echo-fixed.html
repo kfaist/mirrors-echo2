@@ -723,7 +723,6 @@
 
             let _nounDebounce = null;
             let _fullTranscript = '';
-            let _recentFinals = []; // rolling buffer of last few finals for Haiku
             recognition.onresult = (e) => {
                 let interim = '', final = '';
                 for (let i = e.resultIndex; i < e.results.length; i++) {
@@ -735,25 +734,17 @@
                 // Accumulate final speech into full transcript
                 if (final.trim()) _fullTranscript += ' ' + final.trim();
 
-                // p6: ALWAYS update in real-time — no throttle, no delay
-                // Shows "photorealistic" + everything said so far + current interim
+                // p6: ALWAYS show full transcript + current interim in real-time
                 const fullLive = (_fullTranscript + ' ' + interim).trim();
                 if (fullLive) {
                     document.getElementById('p6Display').textContent = 'photorealistic ' + fullLive;
+                    document.getElementById('interimText').textContent = fullLive;
                 }
 
-                // interimText: show current live fragment
-                const live = (interim || final).trim();
-                if (live) document.getElementById('interimText').textContent = live;
-
-                // P5: accumulate recent finals, send combined text to Haiku
-                // This gives Haiku enough context to find nouns in flowing speech
+                // P5: send FULL accumulated transcript to Haiku on every final
+                // Haiku sees entire conversation, picks out the latest concrete noun
                 if (final.trim()) {
-                    _recentFinals.push(final.trim());
-                    // Keep last 5 finals (~10-15 seconds of speech)
-                    if (_recentFinals.length > 5) _recentFinals.shift();
-                    const combined = _recentFinals.join(' ');
-                    submitTranscript(combined);
+                    submitTranscript(_fullTranscript.trim());
                 }
             };
 
@@ -789,27 +780,30 @@
         let _lastNoun = '';
         async function submitTranscript(text) {
             try {
-                // Send combined recent speech to Haiku for noun extraction
+                // Send last ~50 words to Haiku (enough context, not too long)
+                const words = text.split(/\s+/);
+                const recent = words.slice(-50).join(' ');
+                
                 const nounResp = await fetch('https://maestra-monitor-production.up.railway.app/api/nouns', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ text: text })
+                    body: JSON.stringify({ text: recent })
                 });
                 const nounData = await nounResp.json();
                 
                 if (nounData.noun && nounData.noun !== _lastNoun) {
                     _lastNoun = nounData.noun;
                     document.getElementById('p5Word').textContent = nounData.noun;
-                    console.log('[P5] CONCRETE NOUN:', nounData.noun, '← from:', text);
+                    console.log('[P5] CONCRETE NOUN:', nounData.noun);
                     
-                    // Send the FILTERED NOUN to Maestra so SD gets it
+                    // Send noun to Maestra for SD
                     fetch(MAESTRA_URL + '/transcript', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ text: nounData.noun, source: 'browser-speech' })
                     }).catch(() => {});
-                } else {
-                    console.log('[P5] BLOCKED:', text.slice(0, 40));
+                } else if (!nounData.noun) {
+                    console.log('[P5] no noun in:', recent.slice(-60));
                 }
             } catch(e) {
                 console.log('Transcript error:', e);
