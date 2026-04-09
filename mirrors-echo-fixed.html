@@ -682,8 +682,13 @@
                     const msg = JSON.parse(e.data);
                     if (msg.type === 'state_changed' && msg.entity_slug === 'td-audio-reactive') {
                         const st = msg.current_state || {};
-                        // WS state updates — do NOT update p5 (only speech does that)
-                        // p6 handled by live speech only
+                        if (st.p5) {
+                            const kills = new Set(['the','a','an','i','you','he','she','it','we','they','me','him','her','us','them','my','your','his','its','our','their','is','am','are','was','were','be','been','do','does','did','will','would','could','should','can','may','might','go','going','get','got','make','take','say','said','think','know','see','look','want','need','oh','ah','um','yeah','no','not','just','really','very','so','too','okay','well','and','but','or','for','if','then','than','as','to','in','on','at','by','of','up','out','with','from','about','thing','stuff','question','mark','period','point','way','lot','bit','part']);
+                            const words = st.p5.toLowerCase().replace(/[^a-z\s]/g,'').split(/\s+/).filter(w => !kills.has(w) && w.length >= 3);
+                            if (words.length > 0 && words.some(w => w.length >= 4)) {
+                                document.getElementById('p5Word').textContent = words.join(' ');
+                            }
+                        }
                     }
                 } catch(err) {}
             };
