@@ -683,7 +683,7 @@
                     if (msg.type === 'state_changed' && msg.entity_slug === 'td-audio-reactive') {
                         const st = msg.current_state || {};
                         // WS state updates — do NOT update p5 (only speech does that)
-                        if (st.p6) document.getElementById('p6Display').textContent = st.p6;
+                        // p6 handled by live speech only
                     }
                 } catch(err) {}
             };
@@ -700,7 +700,7 @@
                 const d = await r.json();
                 maestraEntityId = d.id;
                 // Init state — do NOT update p5 (only speech does that)
-                if (d.state && d.state.p6) document.getElementById('p6Display').textContent = d.state.p6;
+                // p6 handled by live speech only
             } catch(e) {
                 console.log('Maestra entity fetch failed:', e);
             }
