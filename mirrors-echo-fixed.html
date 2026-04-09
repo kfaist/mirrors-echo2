@@ -747,58 +747,40 @@
                     .replace(/\s+/g, ' ').trim();
             }
 
-            let _addedFinalCount = 0; // track finals already added to _fullTranscript
+            let _prevSessions = ''; // text from previous recognition sessions
             recognition.onresult = (e) => {
-                // Get current session's text (finals + interim)
-                let sessionText = '';
-                let sessionFinalCount = 0;
-                let currentInterim = '';
+                // Build text from ALL results in current session
+                let currentAll = '';
+                let hasNewFinal = false;
                 for (let i = 0; i < e.results.length; i++) {
-                    const t = e.results[i][0].transcript;
-                    if (e.results[i].isFinal) {
-                        sessionText += t + ' ';
-                        sessionFinalCount++;
-                    } else {
-                        currentInterim += t + ' ';
-                    }
+                    currentAll += e.results[i][0].transcript + ' ';
+                }
+                if (e.results[e.resultIndex] && e.results[e.resultIndex].isFinal) {
+                    hasNewFinal = true;
                 }
 
-                // Add NEW finals to persistent transcript (only ones we haven't seen)
-                if (sessionFinalCount > _addedFinalCount) {
-                    let newFinals = '';
-                    let count = 0;
-                    for (let i = 0; i < e.results.length; i++) {
-                        if (e.results[i].isFinal) {
-                            count++;
-                            if (count > _addedFinalCount) {
-                                newFinals += e.results[i][0].transcript + ' ';
-                            }
-                        }
-                    }
-                    if (newFinals.trim()) {
-                        _fullTranscript += ' ' + cleanPunctuation(newFinals.trim());
-                    }
-                    _addedFinalCount = sessionFinalCount;
+                // FULL display = previous sessions + current session (all text)
+                const fullDisplay = cleanPunctuation((_prevSessions + ' ' + currentAll).trim());
+
+                // p6: show FULL flowing transcript — every word ever said
+                if (fullDisplay) {
+                    document.getElementById('p6Display').textContent = 'photorealistic ' + fullDisplay;
+                    document.getElementById('interimText').textContent = fullDisplay;
                 }
 
-                // p6: show persistent transcript + current interim — FULL flowing text
-                const display = cleanPunctuation((_fullTranscript + ' ' + currentInterim).trim());
-                if (display) {
-                    document.getElementById('p6Display').textContent = 'photorealistic ' + display;
-                    document.getElementById('interimText').textContent = display;
-                }
-
-                // P5: send last 15 words to Haiku when new final arrives
-                if (sessionFinalCount > _addedFinalCount - 1) {
-                    const words = display.split(/\s+/);
+                // P5: send last 15 words to Haiku on each new final
+                if (hasNewFinal) {
+                    const words = fullDisplay.split(/\s+/);
                     const recent = words.slice(-15).join(' ');
                     submitTranscript(recent);
                 }
             };
 
-            // Reset final counter when recognition restarts
+            // When recognition restarts, save current session text
             recognition.onend = () => {
-                _addedFinalCount = 0; // reset for new session
+                // Save all finalized text from the session that just ended
+                // (We can't access e.results here, so we save _fullTranscript state)
+                _prevSessions = document.getElementById('interimText').textContent || _prevSessions;
                 if ((isConnected || micTestActive) && speechActive) {
                     try { recognition.start(); } catch(e) {}
                 } else {
