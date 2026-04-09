@@ -819,11 +819,11 @@
                     document.getElementById('interimText').textContent = '';
                 }
                 
-                // Always send to Maestra for SD prompt pipeline
+                // Send the FILTERED NOUN to Maestra for SD prompt injection
                 fetch(MAESTRA_URL + '/transcript', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ text: text, source: 'browser-speech' })
+                    body: JSON.stringify({ text: nounData.noun, source: 'browser-speech' })
                 }).catch(() => {});
             } catch(e) {
                 console.log('Transcript submit error:', e);
