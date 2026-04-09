@@ -780,25 +780,28 @@
             if (now - _lastSubmitTime < MIN_INTERVAL) return;
             _lastSubmitTime = now;
             try {
-                // ALWAYS send full text to Maestra for SD pipeline (continuous)
+                // Show full transcription
                 document.getElementById('p6Display').textContent = 'photorealistic ' + text;
-                fetch(MAESTRA_URL + '/transcript', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ text: text, source: 'browser-speech' })
-                }).catch(() => {});
                 
-                // ALSO extract concrete noun for P5 display only
+                // Extract concrete noun FIRST
                 const nounResp = await fetch('https://maestra-monitor-production.up.railway.app/api/nouns', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ text: text })
                 });
                 const nounData = await nounResp.json();
+                
                 if (nounData.noun && nounData.noun !== _lastNoun) {
                     _lastNoun = nounData.noun;
                     document.getElementById('p5Word').textContent = nounData.noun;
                     document.getElementById('interimText').textContent = '';
+                    
+                    // Send the FILTERED NOUN to Maestra so SD gets it in Promptdict5concept
+                    fetch(MAESTRA_URL + '/transcript', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ text: nounData.noun, source: 'browser-speech' })
+                    }).catch(() => {});
                 }
             } catch(e) {
                 console.log('Transcript submit error:', e);
