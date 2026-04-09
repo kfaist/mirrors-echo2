@@ -769,6 +769,31 @@
         let speechActive = false;
         let maestraEntityId = null;
 
+        // ── P5 FILTER: only compound & concrete nouns pass through ──
+        const _PRONOUNS = new Set(['i','you','he','she','it','we','they','me','him','her','us','them','my','your','his','its','our','their','mine','yours','ours','theirs','myself','yourself','himself','herself','itself','ourselves','themselves','this','that','these','those','who','whom','which','what','whose']);
+        const _STOPWORDS = new Set(['the','a','an','is','are','was','were','be','been','being','have','has','had','do','does','did','will','would','shall','should','may','might','can','could','must','need','dare','ought','used','to','of','in','for','on','with','at','by','from','as','into','through','during','before','after','above','below','between','out','off','over','under','again','further','then','once','here','there','when','where','why','how','all','each','every','both','few','more','most','other','some','such','no','not','only','own','same','so','than','too','very','just','also','now','about','up','if','or','and','but','nor','yet','because','while','although','even','though','since','until','unless','however','therefore','moreover','furthermore','nevertheless','nonetheless','meanwhile','otherwise','instead','rather','quite','still','already','always','never','often','sometimes','usually','perhaps','maybe','really','actually','basically','literally','totally','completely','absolutely','definitely','certainly','probably','possibly','apparently','obviously','clearly','simply','easily','hardly','nearly','almost','enough','much','many','several','various','certain','sure','right','well','just','like','get','got','say','said','go','going','gone','come','came','take','took','make','made','know','knew','think','thought','see','saw','want','look','give','use','find','tell','ask','work','seem','feel','try','leave','call','keep','let','begin','show','hear','play','run','move','live','believe','bring','happen','write','provide','sit','stand','lose','pay','meet','include','continue','set','learn','change','lead','understand','watch','follow','stop','create','speak','read','allow','add','spend','grow','open','walk','win','offer','remember','consider','appear','buy','wait','serve','die','send','expect','build','stay','fall','cut','reach','kill','remain','suggest','raise','pass','sell','require','report','decide','pull']);
+        const _ABSTRACT = new Set(['thing','things','way','ways','time','times','lot','lots','kind','kinds','sort','sorts','type','types','part','parts','bit','bits','stuff','matter','fact','case','point','place','end','idea','thought','reason','question','answer','problem','issue','situation','condition','state','process','system','form','group','number','level','area','side','world','life','day','year','week','month','moment','minute','second','hour','half','example','result','effect','effort','experience','interest','power','force','order','control','action','activity','change','difference','information','evidence','attention','ability','sense','mind','body','term','use','need','help','support','view','position','role','value','service','concern','chance']);
+        function isConcreteOrCompound(phrase) {
+            if (!phrase || typeof phrase !== 'string') return false;
+            const clean = phrase.toLowerCase().replace(/[^a-z\s]/g, '').trim();
+            if (!clean) return false;
+            const words = clean.split(/\s+/).filter(w => w.length > 0);
+            // Remove stopwords/pronouns to get content words
+            const content = words.filter(w => !_PRONOUNS.has(w) && !_STOPWORDS.has(w));
+            if (content.length === 0) return false;
+            // Compound noun: 2+ content words remaining
+            if (content.length >= 2) return true;
+            // Single word: reject if abstract
+            if (content.length === 1 && _ABSTRACT.has(content[0])) return false;
+            // Single content word that isn't abstract — accept
+            return true;
+        }
+        function setP5(text) {
+            if (isConcreteOrCompound(text)) {
+                document.getElementById('p5Word').textContent = text;
+            }
+        }
+
         function connectMaestra() {
             maestraWs = new WebSocket(MAESTRA_WS + '/ws');
             maestraWs.onopen = () => {
@@ -781,7 +806,7 @@
                     const msg = JSON.parse(e.data);
                     if (msg.type === 'state_changed' && msg.entity_slug === 'td-audio-reactive') {
                         const st = msg.current_state || {};
-                        if (st.p5) document.getElementById('p5Word').textContent = st.p5;
+                        if (st.p5) setP5(st.p5);
                         if (st.p6) document.getElementById('p6Display').textContent = st.p6;
                     }
                 } catch(err) {}
@@ -798,7 +823,7 @@
                 const r = await fetch(MAESTRA_URL + '/entities/by-slug/td-audio-reactive');
                 const d = await r.json();
                 maestraEntityId = d.id;
-                if (d.state && d.state.p5) document.getElementById('p5Word').textContent = d.state.p5;
+                if (d.state && d.state.p5) setP5(d.state.p5);
                 if (d.state && d.state.p6) document.getElementById('p6Display').textContent = d.state.p6;
             } catch(e) {
                 console.log('Maestra entity fetch failed:', e);
@@ -889,7 +914,7 @@
                 });
                 const data = await resp.json();
                 if (data.status === 'ok') {
-                    if (data.p5) document.getElementById('p5Word').textContent = data.p5;
+                    if (data.p5) setP5(data.p5);
                     if (data.p6) document.getElementById('p6Display').textContent = data.p6;
                     document.getElementById('interimText').textContent = '';
                 }
