@@ -724,6 +724,29 @@
             let _nounDebounce = null;
             let _fullTranscript = '';
             const MAX_P6_WORDS = 50; // rolling window — oldest words drop off
+            // Strip spelled-out punctuation from Chrome speech recognition
+            function cleanPunctuation(text) {
+                return text
+                    .replace(/question mark/gi, '?')
+                    .replace(/exclamation point/gi, '!')
+                    .replace(/exclamation mark/gi, '!')
+                    .replace(/period/gi, '.')
+                    .replace(/comma/gi, ',')
+                    .replace(/colon/gi, ':')
+                    .replace(/semicolon/gi, ';')
+                    .replace(/dot dot dot/gi, '...')
+                    .replace(/dot dot/gi, '..')
+                    .replace(/dot/gi, '.')
+                    .replace(/hyphen/gi, '-')
+                    .replace(/dash/gi, '-')
+                    .replace(/open quote/gi, '"')
+                    .replace(/close quote/gi, '"')
+                    .replace(/quote/gi, '"')
+                    .replace(/new line/gi, ' ')
+                    .replace(/new paragraph/gi, ' ')
+                    .replace(/\s+/g, ' ').trim();
+            }
+
             recognition.onresult = (e) => {
                 let interim = '', final = '';
                 for (let i = e.resultIndex; i < e.results.length; i++) {
@@ -733,7 +756,7 @@
                 }
 
                 // Accumulate final speech
-                if (final.trim()) _fullTranscript += ' ' + final.trim();
+                if (final.trim()) _fullTranscript += ' ' + cleanPunctuation(final.trim());
 
                 // p6: rolling window of last 50 words + live interim — real-time, every event
                 const allWords = (_fullTranscript + ' ' + interim).trim().split(/\s+/);
