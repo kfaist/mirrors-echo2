@@ -715,7 +715,7 @@
             }
             recognition = new SR();
             recognition.continuous = true;
-            recognition.interimResults = false;
+            recognition.interimResults = true;
             recognition.lang = 'en-US';
             recognition.maxAlternatives = 1;
 
@@ -724,6 +724,7 @@
                 document.getElementById('dotSpeech').style.background = '#6bcb77';
             };
 
+            let _nounDebounce = null;
             recognition.onresult = (e) => {
                 let interim = '', final = '';
                 for (let i = e.resultIndex; i < e.results.length; i++) {
@@ -731,11 +732,20 @@
                     if (e.results[i].isFinal) { final += t; }
                     else { interim += t; }
                 }
-                document.getElementById('interimText').textContent = (interim || final) ? 'listening...' : '';
 
-                // Submit final immediately — no debounce
+                // Show real-time transcription as you speak
+                const live = (final || interim).trim();
+                if (live) {
+                    document.getElementById('interimText').textContent = live;
+                    document.getElementById('p6Display').textContent = 'photorealistic ' + live;
+                }
+
+                // Only extract nouns + push to SD on final speech (2s debounce)
                 if (final.trim()) {
-                    submitTranscript(final.trim());
+                    clearTimeout(_nounDebounce);
+                    _nounDebounce = setTimeout(() => {
+                        submitTranscript(final.trim());
+                    }, 2000);
                 }
             };
 
