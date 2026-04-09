@@ -582,7 +582,7 @@
                 <div id="p5Word" style="font-size:1.5rem;font-weight:300;letter-spacing:0.08em;color:rgb(80,220,220);min-height:2rem;animation:textglow 3s ease-in-out infinite;">—</div>
             </div>
             <div id="interimText" style="font-size:0.7rem;opacity:0.4;margin-top:0.5rem;min-height:1rem;text-align:center;"></div>
-            <div id="p6Display" style="font-size:0.65rem;opacity:0.3;margin-top:0.25rem;text-align:center;display:none;">waiting for speech...</div>
+            <div id="p6Display" style="font-size:0.65rem;opacity:0.5;margin-top:0.5rem;text-align:center;color:rgba(255,255,255,0.6);font-family:'JetBrains Mono',monospace;">waiting for speech...</div>
         </div>
 
         <div class="status-bar">
@@ -801,7 +801,10 @@
         let _lastNoun = '';
         async function submitTranscript(text) {
             try {
-                // Route through concrete/compound noun filter FIRST
+                // Always show full transcription prepended with "photorealistic"
+                document.getElementById('p6Display').textContent = 'photorealistic ' + text;
+                
+                // Route through concrete/compound noun filter for P5
                 const nounResp = await fetch('https://maestra-monitor-production.up.railway.app/api/nouns', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -809,18 +812,19 @@
                 });
                 const nounData = await nounResp.json();
                 
-                // ONLY display if we got a concrete/compound noun AND it's new
+                // ONLY update P5 noun if we got a concrete/compound noun AND it's new
                 if (nounData.noun && nounData.noun !== _lastNoun) {
                     _lastNoun = nounData.noun;
                     document.getElementById('p5Word').textContent = nounData.noun;
                     document.getElementById('interimText').textContent = '';
-                    // Still send to Maestra for SD prompt pipeline
-                    fetch(MAESTRA_URL + '/transcript', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ text: text, source: 'browser-speech' })
-                    }).catch(() => {});
                 }
+                
+                // Always send to Maestra for SD prompt pipeline
+                fetch(MAESTRA_URL + '/transcript', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ text: text, source: 'browser-speech' })
+                }).catch(() => {});
             } catch(e) {
                 console.log('Transcript submit error:', e);
             }
