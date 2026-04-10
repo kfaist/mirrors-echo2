@@ -801,7 +801,7 @@
 
         // Watchdog: 3 second check — if dead, force new recognition
         setInterval(() => {
-            if ((micTestActive || speechActive) && Date.now() - _lastSpeechEvent > 3000) {
+            if ((micTestActive || speechActive) && Date.now() - _lastSpeechEvent > 5000) {
                 console.log('[Watchdog] Dead for 3s — creating fresh recognition');
                 document.getElementById('dotSpeech').style.background = '#b8860b';
                 try { if (recognition) recognition.abort(); } catch(e) {}
@@ -810,7 +810,7 @@
                     try { recognition.start(); } catch(e) {}
                 }
             }
-        }, 2000);
+        }, 4000);
 
         function startSpeechRecognition() {
             recognition = createRecognition();
@@ -1077,8 +1077,8 @@
             try {
                 updateStatus('Getting camera...');
                 localStream = await navigator.mediaDevices.getUserMedia({
-                    video: { width: 1280, height: 720 },
-                    audio: true
+                    video: { width: 640, height: 480, frameRate: { ideal: 15, max: 24 } },
+                    audio: false
                 });
                 localVideo.srcObject = localStream;
                 localPlaceholder.style.display = 'none';
@@ -1389,8 +1389,8 @@
                     if (!localStream || localStream.getTracks().every(t => t.readyState === 'ended')) {
                         debugLog('Camera track died, re-acquiring...', 'warn');
                         localStream = await navigator.mediaDevices.getUserMedia({
-                            video: { width: 1280, height: 720 },
-                            audio: true
+                            video: { width: 640, height: 480, frameRate: { ideal: 15, max: 24 } },
+                            audio: false
                         });
                         localVideo.srcObject = localStream;
                         localPlaceholder.style.display = 'none';
