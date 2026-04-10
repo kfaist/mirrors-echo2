@@ -2,6 +2,9 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>The Mirror's Echo</title>
     <style>
@@ -581,8 +584,8 @@
                 <div style="font-size:10px;letter-spacing:0.3em;text-transform:uppercase;color:rgba(255,255,255,0.3);margin-bottom:4px;">P5 — Noun Phrase → StreamDiffusion</div>
                 <div id="p5Word" style="font-size:1.5rem;font-weight:300;letter-spacing:0.08em;color:rgb(80,220,220);min-height:2rem;animation:textglow 3s ease-in-out infinite;">—</div>
             </div>
-            <div id="interimText" style="display:none;"></div>
-            <div id="p6Display" style="font-size:0.85rem;opacity:0.8;margin-top:0.75rem;text-align:center;color:rgba(255,255,255,0.8);font-family:'JetBrains Mono',monospace;line-height:1.5;max-height:120px;overflow-y:auto;transition:opacity 0.3s ease;">waiting for speech...</div>
+            <div id="interimText" style="font-size:0.7rem;opacity:0.4;margin-top:0.5rem;min-height:1rem;text-align:center;"></div>
+            <div id="p6Display" style="font-size:1rem;opacity:1;margin-top:0.75rem;text-align:center;color:rgba(80,220,220,0.9);font-family:'JetBrains Mono',monospace;line-height:1.6;padding:8px;min-height:40px;">waiting for speech...</div>
         </div>
 
         <div class="status-bar">
@@ -743,6 +746,7 @@
             }
 
             recognition.onresult = (e) => {
+                _lastSpeechEvent = Date.now();
                 // On every final, append to _allText permanently
                 for (let i = e.resultIndex; i < e.results.length; i++) {
                     if (e.results[i].isFinal) {
@@ -775,8 +779,19 @@
 
             // _allText persists across restarts — no saving needed
             recognition.onend = () => {
-                if ((isConnected || micTestActive) && speechActive) {
-                    try { recognition.start(); } catch(e) {}
+                // ALWAYS restart in loud environments — never give up
+                if (micTestActive || speechActive) {
+                    setTimeout(() => {
+                        try { 
+                            recognition.start(); 
+                            speechActive = true;
+                        } catch(e) {
+                            // If start fails, try again in 500ms
+                            setTimeout(() => {
+                                try { recognition.start(); speechActive = true; } catch(e2) {}
+                            }, 500);
+                        }
+                    }, 100);
                 } else {
                     speechActive = false;
                     document.getElementById('dotSpeech').style.background = '#444';
@@ -784,12 +799,26 @@
             };
 
             recognition.onerror = (e) => {
-                if (e.error === 'no-speech') return;
-                console.log('Speech error:', e.error);
                 if (e.error === 'not-allowed') {
                     document.getElementById('interimText').textContent = 'Mic permission denied';
+                    return;
                 }
+                // For ALL other errors (no-speech, network, aborted) — just keep going
+                // Don't stop. Loud environments cause constant no-speech errors.
+                console.log('Speech error (ignoring):', e.error);
             };
+
+            // Watchdog: if no speech events for 10s, force restart
+            let _lastSpeechEvent = Date.now();
+            setInterval(() => {
+                if ((micTestActive || speechActive) && Date.now() - _lastSpeechEvent > 10000) {
+                    console.log('[Watchdog] No speech for 10s — restarting');
+                    try { recognition.stop(); } catch(e) {}
+                    setTimeout(() => {
+                        try { recognition.start(); speechActive = true; } catch(e) {}
+                    }, 200);
+                }
+            }, 5000);
 
             try { recognition.start(); } catch(e) { console.log('Speech start error:', e); }
         }
