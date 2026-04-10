@@ -707,118 +707,117 @@
             connectMaestra();
         }
 
-        function startSpeechRecognition() {
-            const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-            if (!SR) {
-                document.getElementById('interimText').textContent = 'Speech API not supported';
-                return;
-            }
-            recognition = new SR();
-            recognition.continuous = true;
-            recognition.interimResults = true;
-            recognition.lang = 'en-US';
-            recognition.maxAlternatives = 1;
+        // Persistent state — survives recognition restarts
+        let _allText = '';
+        let _lastSpeechEvent = Date.now();
+        function cleanPunctuation(text) {
+            return text
+                .replace(/\bquestion mark\b/gi, '?')
+                .replace(/\bexclamation point\b/gi, '!')
+                .replace(/\bexclamation mark\b/gi, '!')
+                .replace(/\bperiod\b/gi, '.')
+                .replace(/\bcomma\b/gi, ',')
+                .replace(/\bcolon\b/gi, ':')
+                .replace(/\bsemicolon\b/gi, ';')
+                .replace(/\bdot dot dot\b/gi, '...')
+                .replace(/\bdot dot\b/gi, '..')
+                .replace(/\bhyphen\b/gi, '-')
+                .replace(/\bdash\b/gi, '-')
+                .replace(/\bopen quote\b/gi, '"')
+                .replace(/\bclose quote\b/gi, '"')
+                .replace(/\bnew line\b/gi, ' ')
+                .replace(/\bnew paragraph\b/gi, ' ')
+                .replace(/\s+/g, ' ').trim();
+        }
 
-            recognition.onstart = () => {
+        function createRecognition() {
+            const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+            if (!SR) return null;
+            const r = new SR();
+            r.continuous = true;
+            r.interimResults = true;
+            r.lang = 'en-US';
+            r.maxAlternatives = 1;
+
+            r.onstart = () => {
                 speechActive = true;
                 document.getElementById('dotSpeech').style.background = '#6bcb77';
+                _lastSpeechEvent = Date.now();
             };
 
-            let _allText = ''; // EVERYTHING ever said, persists forever
-            function cleanPunctuation(text) {
-                return text
-                    .replace(/\bquestion mark\b/gi, '?')
-                    .replace(/\bexclamation point\b/gi, '!')
-                    .replace(/\bexclamation mark\b/gi, '!')
-                    .replace(/\bperiod\b/gi, '.')
-                    .replace(/\bcomma\b/gi, ',')
-                    .replace(/\bcolon\b/gi, ':')
-                    .replace(/\bsemicolon\b/gi, ';')
-                    .replace(/\bdot dot dot\b/gi, '...')
-                    .replace(/\bdot dot\b/gi, '..')
-                    .replace(/\bhyphen\b/gi, '-')
-                    .replace(/\bdash\b/gi, '-')
-                    .replace(/\bopen quote\b/gi, '"')
-                    .replace(/\bclose quote\b/gi, '"')
-                    .replace(/\bnew line\b/gi, ' ')
-                    .replace(/\bnew paragraph\b/gi, ' ')
-                    .replace(/\s+/g, ' ').trim();
-            }
-
-            recognition.onresult = (e) => {
+            r.onresult = (e) => {
                 _lastSpeechEvent = Date.now();
-                // On every final, append to _allText permanently
+                // Append new finals to _allText
                 for (let i = e.resultIndex; i < e.results.length; i++) {
                     if (e.results[i].isFinal) {
                         _allText += ' ' + e.results[i][0].transcript;
                     }
                 }
-
-                // Get current interim (words being spoken right now)
+                // Get current interim
                 let interim = '';
                 for (let i = 0; i < e.results.length; i++) {
                     if (!e.results[i].isFinal) {
                         interim += e.results[i][0].transcript + ' ';
                     }
                 }
-
-                // DISPLAY: _allText + interim = everything + live speech
+                // Display: _allText + interim = everything ever said + live speech
                 const everything = cleanPunctuation((_allText + ' ' + interim).trim());
                 const words = everything.split(/\s+/);
                 const last15 = words.slice(-15).join(' ');
-
-                // p6: last 15 words FIFO — updates every speech event
                 document.getElementById('p6Display').textContent = 'photorealistic ' + last15;
                 document.getElementById('interimText').textContent = last15;
-
-                // P5: on every new final, send last 15 to Haiku
+                // P5: on final, send to Haiku
                 if (e.results[e.resultIndex] && e.results[e.resultIndex].isFinal) {
                     submitTranscript(last15);
                 }
             };
 
-            // _allText persists across restarts — no saving needed
-            recognition.onend = () => {
-                // ALWAYS restart in loud environments — never give up
+            r.onend = () => {
+                // ALWAYS create fresh recognition object and restart
                 if (micTestActive || speechActive) {
+                    document.getElementById('dotSpeech').style.background = '#b8860b'; // gold = restarting
                     setTimeout(() => {
-                        try { 
-                            recognition.start(); 
-                            speechActive = true;
-                        } catch(e) {
-                            // If start fails, try again in 500ms
-                            setTimeout(() => {
-                                try { recognition.start(); speechActive = true; } catch(e2) {}
-                            }, 500);
+                        recognition = createRecognition();
+                        if (recognition) {
+                            try { recognition.start(); } catch(e) {}
                         }
-                    }, 100);
+                    }, 50);
                 } else {
                     speechActive = false;
                     document.getElementById('dotSpeech').style.background = '#444';
                 }
             };
 
-            recognition.onerror = (e) => {
+            r.onerror = (e) => {
                 if (e.error === 'not-allowed') {
                     document.getElementById('interimText').textContent = 'Mic permission denied';
                     return;
                 }
-                // For ALL other errors (no-speech, network, aborted) — just keep going
-                // Don't stop. Loud environments cause constant no-speech errors.
-                console.log('Speech error (ignoring):', e.error);
+                // All other errors: ignore, onend will restart
             };
 
-            // Watchdog: if no speech events for 10s, force restart
-            let _lastSpeechEvent = Date.now();
-            setInterval(() => {
-                if ((micTestActive || speechActive) && Date.now() - _lastSpeechEvent > 10000) {
-                    console.log('[Watchdog] No speech for 10s — restarting');
-                    try { recognition.stop(); } catch(e) {}
-                    setTimeout(() => {
-                        try { recognition.start(); speechActive = true; } catch(e) {}
-                    }, 200);
+            return r;
+        }
+
+        // Watchdog: 3 second check — if dead, force new recognition
+        setInterval(() => {
+            if ((micTestActive || speechActive) && Date.now() - _lastSpeechEvent > 3000) {
+                console.log('[Watchdog] Dead for 3s — creating fresh recognition');
+                document.getElementById('dotSpeech').style.background = '#b8860b';
+                try { if (recognition) recognition.abort(); } catch(e) {}
+                recognition = createRecognition();
+                if (recognition) {
+                    try { recognition.start(); } catch(e) {}
                 }
-            }, 5000);
+            }
+        }, 2000);
+
+        function startSpeechRecognition() {
+            recognition = createRecognition();
+            if (!recognition) {
+                document.getElementById('interimText').textContent = 'Speech API not supported';
+                return;
+            }
 
             try { recognition.start(); } catch(e) { console.log('Speech start error:', e); }
         }
